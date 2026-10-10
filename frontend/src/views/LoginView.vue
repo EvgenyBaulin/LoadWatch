@@ -40,11 +40,11 @@ async function submit(): Promise<void> {
       <ErrorMessage v-if="error" :error="error" />
       <label class="field">
         <span class="field-label">{{ t('auth.email') }}</span>
-        <input v-model="email" class="input" type="email" autocomplete="email" required autofocus />
+        <input v-model="email" name="email" class="input" type="email" autocomplete="email" required autofocus />
       </label>
       <label class="field">
         <span class="field-label">{{ t('auth.password') }}</span>
-        <input v-model="password" class="input" type="password" autocomplete="current-password" required />
+        <input v-model="password" name="password" class="input" type="password" autocomplete="current-password" required />
       </label>
       <button type="submit" class="btn btn-primary" :disabled="busy || !email || !password">
         {{ busy ? t('common.loading') : t('auth.login') }}

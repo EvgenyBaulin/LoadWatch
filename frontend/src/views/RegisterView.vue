@@ -50,6 +50,7 @@ async function submit(): Promise<void> {
         <span class="field-label">{{ t('auth.email') }}</span>
         <input
           v-model="email"
+          name="email"
           class="input"
           type="email"
           autocomplete="email"
@@ -63,6 +64,7 @@ async function submit(): Promise<void> {
         <span class="field-label">{{ t('auth.password') }}</span>
         <input
           v-model="password"
+          name="password"
           class="input"
           type="password"
           autocomplete="new-password"
@@ -78,7 +80,7 @@ async function submit(): Promise<void> {
       </label>
       <label class="field">
         <span class="field-label">{{ t('auth.inviteCode') }}</span>
-        <input v-model="inviteCode" class="input" type="text" autocomplete="off" :placeholder="t('auth.inviteCodePlaceholder')" />
+        <input v-model="inviteCode" name="invite_code" class="input" type="text" autocomplete="off" :placeholder="t('auth.inviteCodePlaceholder')" />
         <span class="field-hint">{{ t('auth.inviteCodeHint') }}</span>
       </label>
       <button type="submit" class="btn btn-primary" :disabled="busy || !email || !password">
