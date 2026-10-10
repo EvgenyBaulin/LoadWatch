@@ -50,6 +50,9 @@ class RunOut(BaseModel):
     slo_met: bool | None
     cancel_requested: bool
     metrics: RunMetricsBrief | None
+    regression: dict[str, Any] | None = Field(
+        default=None, description="Базовая линия и ухудшения; null — сравнивать было не с чем"
+    )
 
 
 class RunDetailOut(RunOut):

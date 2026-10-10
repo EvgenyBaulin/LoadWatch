@@ -143,39 +143,7 @@ class RunQueueService:
         return self._out(run, self._runs.get_metrics(run.id))
 
     def _out(self, run: TestRun, metrics: RunMetrics | None) -> RunOut:
-        brief = (
-            RunMetricsBrief(
-                requests=metrics.requests,
-                rps=metrics.rps,
-                error_rate=metrics.error_rate,
-                latency_p50_ms=metrics.latency_p50_ms,
-                latency_p95_ms=metrics.latency_p95_ms,
-                latency_p99_ms=metrics.latency_p99_ms,
-                apdex=metrics.apdex,
-                ceiling_rps=metrics.ceiling_rps,
-            )
-            if metrics is not None
-            else None
-        )
-        return RunOut.model_validate(
-            {
-                "id": run.id,
-                "site_id": run.site_id,
-                "scenario_id": run.scenario_id,
-                "status": run.status,
-                "source": run.source,
-                "label": run.label,
-                "queued_at": run.queued_at,
-                "started_at": run.started_at,
-                "finished_at": run.finished_at,
-                "stop_reason": run.stop_reason,
-                "error": run.error,
-                "generator_saturated": run.generator_saturated,
-                "slo_met": run.slo_met,
-                "cancel_requested": run.cancel_requested,
-                "metrics": brief,
-            }
-        )
+        return run_out(run, metrics)
 
     def _owned(self, owner: User, run_id: uuid.UUID) -> TestRun:
         run = self._runs.get_owned(run_id, owner.id)
@@ -188,3 +156,41 @@ class RunQueueService:
         if site is None:
             raise NotFoundError()
         return site
+
+
+def run_out(run: TestRun, metrics: RunMetrics | None) -> RunOut:
+    """Запуск для ответов API."""
+    brief = (
+        RunMetricsBrief(
+            requests=metrics.requests,
+            rps=metrics.rps,
+            error_rate=metrics.error_rate,
+            latency_p50_ms=metrics.latency_p50_ms,
+            latency_p95_ms=metrics.latency_p95_ms,
+            latency_p99_ms=metrics.latency_p99_ms,
+            apdex=metrics.apdex,
+            ceiling_rps=metrics.ceiling_rps,
+        )
+        if metrics is not None
+        else None
+    )
+    return RunOut.model_validate(
+        {
+            "id": run.id,
+            "site_id": run.site_id,
+            "scenario_id": run.scenario_id,
+            "status": run.status,
+            "source": run.source,
+            "label": run.label,
+            "queued_at": run.queued_at,
+            "started_at": run.started_at,
+            "finished_at": run.finished_at,
+            "stop_reason": run.stop_reason,
+            "error": run.error,
+            "generator_saturated": run.generator_saturated,
+            "slo_met": run.slo_met,
+            "cancel_requested": run.cancel_requested,
+            "metrics": brief,
+            "regression": run.regression,
+        }
+    )

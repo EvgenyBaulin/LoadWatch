@@ -81,6 +81,8 @@ class TestRun(TimestampMixin, Base):
     error: Mapped[str | None] = mapped_column(String(500))
     generator_saturated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     slo_met: Mapped[bool | None] = mapped_column(Boolean)
+    # Итог RegressionDetector: базовая линия и ухудшения (None — сравнивать было не с чем).
+    regression: Mapped[dict[str, Any] | None] = mapped_column(JsonType)
     cancel_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     queued_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(UtcDateTime)

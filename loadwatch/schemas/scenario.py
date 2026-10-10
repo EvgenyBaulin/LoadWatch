@@ -22,8 +22,37 @@ class ConstantProfileIn(BaseModel):
     duration_sec: float = Field(gt=0, le=86_400)
 
 
-# Остальные профили (рост, ступени) добавятся в фазе 6 в этот же Union.
-LoadProfileIn = Annotated[ConstantProfileIn, Field(discriminator="type")]
+class RampUpProfileIn(BaseModel):
+    """Плавный рост от ``start_rate`` до ``end_rate`` за ``ramp_sec``, затем ``hold_sec``."""
+
+    type: Literal["ramp_up"]
+    start_rate: float = Field(ge=0, le=10_000)
+    end_rate: float = Field(gt=0, le=10_000)
+    ramp_sec: float = Field(gt=0, le=86_400)
+    hold_sec: float = Field(default=0, ge=0, le=86_400)
+
+    @model_validator(mode="after")
+    def _growing(self) -> RampUpProfileIn:
+        if self.start_rate > self.end_rate:
+            raise ValueError("start_rate must not exceed end_rate")
+        return self
+
+
+class StepProfileIn(BaseModel):
+    """Ступени: от ``start_rate`` с шагом ``step_rate``, пока сайт держит пороги."""
+
+    type: Literal["step"]
+    start_rate: float = Field(gt=0, le=10_000)
+    step_rate: float = Field(gt=0, le=10_000)
+    step_duration_sec: int = Field(ge=5, le=3600)
+    max_steps: int = Field(ge=1, le=100)
+    max_error_rate: float = Field(default=0.05, ge=0, le=1)
+    max_p95_ms: float | None = Field(default=None, gt=0, le=600_000)
+
+
+LoadProfileIn = Annotated[
+    ConstantProfileIn | RampUpProfileIn | StepProfileIn, Field(discriminator="type")
+]
 
 
 class ScenarioIn(BaseModel):
@@ -109,10 +138,12 @@ class DryRunOut(BaseModel):
 __all__ = [
     "ConstantProfileIn",
     "DryRunOut",
+    "RampUpProfileIn",
     "RequestStep",
     "ScenarioIn",
     "ScenarioOut",
     "SecretOut",
     "SecretsUpdate",
+    "StepProfileIn",
     "StepResultOut",
 ]

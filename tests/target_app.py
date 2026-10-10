@@ -43,6 +43,27 @@ async def gzip_bomb() -> Response:
 
 
 TOKENS: set[str] = set()
+TUNABLE_DELAY_MS = {"value": 0}
+_LIMITED: dict[int, int] = {}
+
+
+@app.get("/tunable")
+async def tunable() -> PlainTextResponse:
+    """Задержку меняет тест — так имитируется «сайт стал медленнее после деплоя»."""
+    await asyncio.sleep(TUNABLE_DELAY_MS["value"] / 1000)
+    return PlainTextResponse("ok")
+
+
+@app.get("/limited")
+async def limited(rps: int = 30) -> PlainTextResponse:
+    """Держит не больше ``rps`` запросов в секунду, остальным — 503 (как перегруженный сайт)."""
+    second = int(time.monotonic())
+    _LIMITED[second] = _LIMITED.get(second, 0) + 1
+    for old in [key for key in _LIMITED if key < second - 5]:
+        del _LIMITED[old]
+    if _LIMITED[second] > rps:
+        return PlainTextResponse("overloaded", status_code=503)
+    return PlainTextResponse("ok")
 
 
 @app.post("/api/login")

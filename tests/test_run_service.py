@@ -94,6 +94,7 @@ def test_run_is_executed_and_metrics_saved(
     assert run.params == {
         "profile": {"type": "constant", "rate": 10.0, "duration_sec": 1.5},
         "flow": [{"name": "home", "method": "GET", "path": "/"}],
+        "apdex_t_ms": 500,
     }
     assert run.params_hash == params_hash(run.params)
     metrics = session.get(RunMetrics, run.id)

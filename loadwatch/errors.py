@@ -189,3 +189,11 @@ class RunNotCancellableError(AppError):
     code = "run_not_cancellable"
     status_code = 409
     message = "The run has already finished"
+
+
+class InvalidPeriodError(AppError):
+    """Неверный период: ``from`` позже ``to`` или период длиннее 400 дней."""
+
+    code = "invalid_period"
+    status_code = 422
+    message = "Invalid period: 'from' must be before 'to' and the period at most 400 days"

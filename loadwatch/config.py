@@ -135,6 +135,14 @@ class Settings(BaseSettings):
     alert_repeat_minutes: int = Field(default=60, ge=1)
     recovery_runs: int = Field(default=2, ge=1)
 
+    # Регрессия: сравнение с медианой последних сопоставимых успешных запусков.
+    regression_baseline_runs: int = Field(default=5, ge=1)
+    regression_min_baseline_runs: int = Field(default=3, ge=1)
+    regression_p95_increase_pct: float = Field(default=30.0, gt=0)
+    regression_error_rate_increase: float = Field(default=0.02, gt=0)  # абсолютные доли
+    regression_apdex_drop: float = Field(default=0.1, gt=0)
+    regression_ceiling_drop_pct: float = Field(default=20.0, gt=0)
+
     retention_days: int = Field(default=90, ge=1)
 
     telegram_bot_token: SecretStr | None = None

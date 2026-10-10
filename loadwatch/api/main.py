@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from loadwatch import __version__
 from loadwatch.api.error_handlers import register_error_handlers
 from loadwatch.api.rate_limit import SlidingWindowRateLimiter
-from loadwatch.api.routers import auth, health, runs, scenarios, sites, users
+from loadwatch.api.routers import auth, dashboard, health, runs, scenarios, sites, users
 from loadwatch.config import Settings, get_settings
 from loadwatch.db import create_db_engine, create_session_factory
 from loadwatch.logging_setup import configure_logging, warn_about_unsafe_settings
@@ -65,6 +65,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["Authorization", "Content-Type"],
     )
-    for module in (health, auth, users, sites, scenarios, runs):
+    for module in (health, auth, users, sites, scenarios, runs, dashboard):
         app.include_router(module.router, prefix=API_PREFIX)
     return app

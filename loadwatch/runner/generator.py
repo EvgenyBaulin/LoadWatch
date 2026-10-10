@@ -116,6 +116,7 @@ class RunOutcome:
     stop_reason: str  # completed | cancelled | bandwidth_limit | profile:<причина>
     generator: dict[str, Any]
     profile: dict[str, Any]
+    profile_result: dict[str, Any] | None = None  # например, потолок ступенчатой нагрузки
 
     @property
     def generator_saturated(self) -> bool:
@@ -188,6 +189,12 @@ class LoadRunner:
                 await self._abort(active, collector)
             else:
                 await self._drain(active, collector)
+                # Последние секунды профиль ещё не видел (цикл вышел по длительности):
+                # без них последняя ступень StepLoad осталась бы без оценки.
+                for last_second in range(next_second - 1, int(profile.duration_sec)):
+                    profile.observe(
+                        last_second, collector.second(last_second), saturated=monitor.saturated
+                    )
             # Длительность — до последнего ответа: иначе RPS завышался бы на время дожидания.
             duration = time.perf_counter() - started
         finally:
@@ -203,6 +210,7 @@ class LoadRunner:
             stop_reason=stop_reason,
             generator=monitor.summary(),
             profile=profile.to_dict(),
+            profile_result=profile.result(),
         )
 
     def _close_second(

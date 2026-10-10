@@ -13,6 +13,7 @@ from loadwatch.config import Settings
 from loadwatch.errors import NotAuthenticatedError
 from loadwatch.models import User
 from loadwatch.services.auth_service import AuthService
+from loadwatch.services.dashboard_service import DashboardService
 from loadwatch.services.run_queue_service import RunQueueService
 from loadwatch.services.scenario_service import ScenarioService
 from loadwatch.services.schedule_service import ScheduleService
@@ -91,3 +92,11 @@ def get_schedule_service(session: SessionDep, settings: SettingsDep) -> Schedule
 
 
 ScheduleServiceDep = Annotated[ScheduleService, Depends(get_schedule_service)]
+
+
+def get_dashboard_service(session: SessionDep, settings: SettingsDep) -> DashboardService:
+    """Сервис данных дашборда."""
+    return DashboardService(session, settings)
+
+
+DashboardServiceDep = Annotated[DashboardService, Depends(get_dashboard_service)]

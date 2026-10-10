@@ -17,6 +17,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from loadwatch.analysis import RegressionDetector, RunPoint, slo_met
 from loadwatch.config import Settings
 from loadwatch.db import utcnow
 from loadwatch.flow import FlowExecutor, parse_flow
@@ -53,6 +54,8 @@ class PreparedRun:
     iteration: Iteration
     apdex_t_ms: float
     params: dict[str, Any]
+    slo_p95_ms: int | None = None
+    slo_max_error_rate: float | None = None
 
 
 def params_hash(params: dict[str, Any]) -> str:
@@ -143,13 +146,20 @@ class RunService:
         if flow.secret_names() - secrets.keys():
             raise RunAbortedError("missing_secret")
         # В параметрах только описание потока: значения секретов не попадают в БД открыто.
-        params = {"profile": profile.to_dict(), "flow": scenario.flow}
+        # Apdex(T) входит в параметры: при другом T оценки несравнимы.
+        params = {
+            "profile": profile.to_dict(),
+            "flow": scenario.flow,
+            "apdex_t_ms": scenario.apdex_t_ms,
+        }
         return PreparedRun(
             pinned=pinned,
             dns_ms=dns_ms,
             profile=profile,
             iteration=FlowExecutor(flow, secrets),
             apdex_t_ms=float(scenario.apdex_t_ms),
+            slo_p95_ms=scenario.slo_p95_ms,
+            slo_max_error_rate=scenario.slo_max_error_rate,
             params=params,
         )
 
@@ -204,9 +214,17 @@ class RunService:
         summary = outcome.collector.summary(outcome.duration_sec, apdex_t_ms=prepared.apdex_t_ms)
         summary["generator"] = outcome.generator
         summary["stop_reason"] = outcome.stop_reason
-        self._runs.save_metrics(
-            metrics_from_summary(run.id, summary, outcome.collector, outcome.duration_sec)
-        )
+        truncated = outcome.stop_reason == "bandwidth_limit"
+        if outcome.profile_result is not None:
+            if truncated:
+                # Тест оборвал лимит полосы, а не сайт: найденное — только нижняя граница.
+                outcome.profile_result["ceiling_is_lower_bound"] = True
+                outcome.profile_result["reason"] = "bandwidth_limit"
+            summary["step_load"] = outcome.profile_result
+        metrics = metrics_from_summary(run.id, summary, outcome.collector, outcome.duration_sec)
+        if outcome.profile_result is not None:
+            metrics.ceiling_rps = outcome.profile_result.get("ceiling_rps")
+        self._runs.save_metrics(metrics)
         self._session.refresh(run, ["status"], with_for_update=True)
         if run.status != RunStatus.RUNNING.value:
             # Пока шёл тест, запуск пометили зависшим: итог не перезаписываем, метрики — сохраняем.
@@ -221,6 +239,23 @@ class RunService:
         run.stop_reason = outcome.stop_reason
         run.generator_saturated = outcome.generator_saturated
         run.finished_at = utcnow()
+        requests = summary["requests"]
+        # Точные значения, а не округлённые: 1 ошибка на 30 000 запросов — это не ноль.
+        # Без единого запроса SLO не оценивается вовсе.
+        run.slo_met = (
+            slo_met(
+                outcome.collector.overall.latency.percentile(95),
+                summary["errors"] / requests,
+                slo_p95_ms=prepared.slo_p95_ms,
+                slo_max_error_rate=prepared.slo_max_error_rate,
+            )
+            if requests
+            else None
+        )
+        comparable = not run.generator_saturated and not truncated and requests > 0
+        if run.status == RunStatus.FINISHED.value and comparable:
+            # Насыщенный генератор даёт недостоверные цифры — с ними не сравниваем.
+            run.regression = self._regression(run, metrics)
         self._session.commit()
         logger.info(
             "Run %s %s: %s requests, p95 %.1f ms, errors %.2f%%, saturated=%s",
@@ -232,6 +267,20 @@ class RunService:
             outcome.generator_saturated,
         )
 
+    def _regression(self, run: TestRun, metrics: RunMetrics) -> dict[str, Any] | None:
+        """Сравнение с медианой последних сопоставимых запусков."""
+        history = self._runs.comparable_history(run, limit=self._settings.regression_baseline_runs)
+        result = RegressionDetector(self._settings).detect(
+            _point(metrics), [_point(past) for _, past in history]
+        )
+        if result is not None and result.detected:
+            logger.info(
+                "Run %s regression: %s",
+                run.id,
+                ", ".join(f"{f.metric} {f.baseline} -> {f.current}" for f in result.findings),
+            )
+        return result.to_dict() if result is not None else None
+
     def _fail(self, run: TestRun, code: str) -> TestRun:
         run.status = RunStatus.FAILED.value
         run.error = code
@@ -239,6 +288,15 @@ class RunService:
         self._session.commit()
         logger.warning("Run %s failed: %s", run.id, code)
         return run
+
+
+def _point(metrics: RunMetrics) -> RunPoint:
+    return RunPoint(
+        p95_ms=metrics.latency_p95_ms,
+        error_rate=metrics.error_rate,
+        apdex=metrics.apdex,
+        ceiling_rps=metrics.ceiling_rps,
+    )
 
 
 def metrics_from_summary(
