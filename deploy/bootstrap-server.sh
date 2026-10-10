@@ -56,6 +56,8 @@ DB_USER=loadwatch
 WEBROOT=/var/www/certbot
 HEADERS_SNIPPET=/etc/nginx/snippets/loadwatch-headers.conf
 SRC=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)   # каталог deploy/ с файлами
+# Команды от других пользователей (postgres, deploy) не должны стартовать в /root.
+cd /
 
 log() { printf '\n==> %s\n' "$*"; }
 die() { printf 'ОШИБКА: %s\n' "$*" >&2; exit 1; }
@@ -134,8 +136,9 @@ log "Python $PYTHON_VERSION от uv в $UV_PYTHON_DIR"
 # Каталог принадлежит deploy (deploy.sh ставит туда же), читают все: на него
 # ссылается .venv, из которого работают сервисы под $SERVICE_USER.
 install -d -m 755 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$UV_PYTHON_DIR"
-runuser -u "$DEPLOY_USER" -- env UV_PYTHON_INSTALL_DIR="$UV_PYTHON_DIR" \
-    /usr/local/bin/uv python install --quiet "$PYTHON_VERSION"
+# С HOME пользователя: иначе uv ищет свои настройки в /root.
+runuser -u "$DEPLOY_USER" -- env HOME="/home/$DEPLOY_USER" \
+    UV_PYTHON_INSTALL_DIR="$UV_PYTHON_DIR" /usr/local/bin/uv python install --quiet "$PYTHON_VERSION"
 
 # --- 3. PostgreSQL ------------------------------------------------------------------
 log "PostgreSQL: настройки под 1 ГБ"
