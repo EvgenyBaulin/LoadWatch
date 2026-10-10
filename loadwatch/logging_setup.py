@@ -1,4 +1,4 @@
-"""Process-wide logging configuration."""
+"""Настройка логирования процесса."""
 
 from __future__ import annotations
 
@@ -10,16 +10,16 @@ LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 
 
 def configure_logging(settings: Settings) -> None:
-    """Configure the root logger once; repeated calls are harmless."""
+    """Настраивает корневой логгер; повторный вызов безвреден."""
     level = logging.DEBUG if settings.environment is Environment.DEVELOPMENT else logging.INFO
     logging.basicConfig(level=level, format=LOG_FORMAT)
-    # SQL echo and per-request access lines are noisy at DEBUG.
+    # SQL и строки доступа на уровне DEBUG слишком шумные.
     logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def warn_about_unsafe_settings(settings: Settings) -> None:
-    """Log loud warnings for settings that weaken security."""
+    """Громко предупреждает о настройках, ослабляющих безопасность."""
     log = logging.getLogger("loadwatch")
     if settings.allow_private_targets:
         log.warning(

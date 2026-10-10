@@ -1,1 +1,1 @@
-"""HTTP routers; thin wrappers around services."""
+"""HTTP-роутеры — тонкие обёртки над сервисами."""

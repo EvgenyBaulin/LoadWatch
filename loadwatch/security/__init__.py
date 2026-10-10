@@ -1,1 +1,1 @@
-"""Security primitives: passwords, tokens and (later) SSRF protection and secrets."""
+"""Безопасность: пароли, токены, защита от SSRF, шифрование секретов."""

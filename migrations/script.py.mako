@@ -17,10 +17,10 @@ depends_on: str | Sequence[str] | None = ${repr(depends_on)}
 
 
 def upgrade() -> None:
-    """Apply this revision."""
+    """Применить ревизию."""
     ${upgrades if upgrades else "pass"}
 
 
 def downgrade() -> None:
-    """Revert this revision."""
+    """Откатить ревизию."""
     ${downgrades if downgrades else "pass"}

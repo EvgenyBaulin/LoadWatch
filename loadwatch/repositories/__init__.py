@@ -1,4 +1,4 @@
-"""Repositories: the only layer that talks SQL."""
+"""Репозитории — единственный слой, который пишет SQL."""
 
 from loadwatch.repositories.user_repository import UserRepository
 

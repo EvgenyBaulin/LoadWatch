@@ -1,7 +1,7 @@
-"""Check the LoadWatch configuration without printing secret values.
+"""Проверка конфигурации LoadWatch без вывода секретных значений.
 
-Usage: ``uv run python scripts/check_env.py`` (reads ``.env`` unless
-``LOADWATCH_ENV_FILE`` points elsewhere). Exit code 1 if something required is wrong.
+Запуск: ``uv run python scripts/check_env.py`` (читает ``.env``, если
+``LOADWATCH_ENV_FILE`` не указывает на другой файл). Код выхода 1 — что-то не так.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from loadwatch.config import Settings
 
 
 def main() -> int:
-    """Validate settings, report optional features and try the database."""
+    """Проверяет настройки, показывает необязательные возможности и пробует базу."""
     try:
         settings = Settings()
     except ValidationError as exc:

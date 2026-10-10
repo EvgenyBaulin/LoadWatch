@@ -1,4 +1,4 @@
-"""Migrations match the ORM models."""
+"""Миграции совпадают с ORM-моделями."""
 
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext

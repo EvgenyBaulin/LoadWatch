@@ -1,4 +1,4 @@
-"""``/users/me``: preferences of the current user."""
+"""``/users/me``: настройки текущего пользователя."""
 
 from __future__ import annotations
 
@@ -12,5 +12,5 @@ router = APIRouter(prefix="/users/me", tags=["users"])
 
 @router.put("/preferences")
 def update_preferences(data: PreferencesUpdate, user: CurrentUser, auth: AuthServiceDep) -> UserOut:
-    """Change interface language and/or time zone."""
+    """Сменить язык интерфейса и/или часовой пояс."""
     return UserOut.model_validate(auth.update_preferences(user, data))

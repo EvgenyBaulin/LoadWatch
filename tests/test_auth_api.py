@@ -1,4 +1,4 @@
-"""Registration, login, current user, preferences and the error format."""
+"""Регистрация, вход, текущий пользователь, настройки и формат ошибок."""
 
 from collections.abc import Callable
 
@@ -28,7 +28,7 @@ def test_register_returns_token_and_user(client: TestClient) -> None:
     assert body["user"]["email"] == "owner@example.com"
     assert body["user"]["locale"] == "ru"
     assert body["user"]["timezone"] == "UTC"
-    assert body["user"]["created_at"].endswith(("Z", "+00:00"))  # always UTC
+    assert body["user"]["created_at"].endswith(("Z", "+00:00"))  # всегда UTC
     assert "password" not in str(body)
 
 
@@ -111,7 +111,7 @@ def test_update_preferences(client: TestClient) -> None:
     assert response.status_code == 200
     assert response.json()["locale"] == "ru"
     assert response.json()["timezone"] == "Europe/Amsterdam"
-    # partial update keeps the other field
+    # частичное обновление не трогает второе поле
     response = client.put(
         "/api/v1/users/me/preferences", json={"locale": "en"}, headers=auth_headers(token)
     )

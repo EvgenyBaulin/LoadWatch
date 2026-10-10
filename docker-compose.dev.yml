@@ -1,5 +1,5 @@
-# Local PostgreSQL for development and tests.
-# Usage: docker compose -f docker-compose.dev.yml up -d
+# Локальный PostgreSQL для разработки и тестов.
+# Запуск: docker compose -f docker-compose.dev.yml up -d
 services:
   postgres:
     image: postgres:16-alpine

@@ -1,4 +1,4 @@
-"""JWT access tokens."""
+"""JWT-токены доступа."""
 
 from __future__ import annotations
 
@@ -12,11 +12,11 @@ from loadwatch.db import utcnow
 
 
 class InvalidTokenError(Exception):
-    """The token is malformed, expired or signed with another key."""
+    """Токен повреждён, просрочен или подписан другим ключом."""
 
 
 def create_access_token(user_id: uuid.UUID, settings: Settings) -> str:
-    """Issue a signed access token for ``user_id``."""
+    """Выпускает подписанный токен доступа для ``user_id``."""
     now = utcnow()
     payload = {
         "sub": str(user_id),
@@ -30,7 +30,7 @@ def create_access_token(user_id: uuid.UUID, settings: Settings) -> str:
 
 
 def decode_access_token(token: str, settings: Settings) -> uuid.UUID:
-    """Return the user id from a valid access token or raise :class:`InvalidTokenError`."""
+    """Id пользователя из действительного токена, иначе :class:`InvalidTokenError`."""
     try:
         payload = jwt.decode(
             token,

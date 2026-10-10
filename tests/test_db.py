@@ -1,4 +1,4 @@
-"""Database helpers."""
+"""Вспомогательные типы БД."""
 
 from datetime import UTC, datetime, timedelta, timezone
 

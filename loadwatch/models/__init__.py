@@ -1,5 +1,6 @@
-"""ORM models. Importing this package registers every table on ``Base.metadata``."""
+"""ORM-модели. Импорт пакета регистрирует все таблицы в ``Base.metadata``."""
 
+from loadwatch.models.site import Site, VerificationMethod, VerificationStatus
 from loadwatch.models.user import User
 
-__all__ = ["User"]
+__all__ = ["Site", "User", "VerificationMethod", "VerificationStatus"]

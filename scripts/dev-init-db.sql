@@ -1,2 +1,2 @@
--- Separate database for the test suite.
+-- Отдельная база для тестов.
 CREATE DATABASE loadwatch_test OWNER loadwatch;

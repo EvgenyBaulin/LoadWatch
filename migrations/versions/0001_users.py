@@ -1,4 +1,4 @@
-"""Create users table.
+"""Таблица пользователей.
 
 Revision ID: 0001
 Revises:
@@ -17,7 +17,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Apply this revision."""
+    """Применить ревизию."""
     op.create_table(
         "users",
         sa.Column("id", sa.Uuid(), nullable=False),
@@ -34,5 +34,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Revert this revision."""
+    """Откатить ревизию."""
     op.drop_table("users")

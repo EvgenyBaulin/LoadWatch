@@ -1,4 +1,4 @@
-"""Settings and resource profiles."""
+"""Настройки и профили ресурсов."""
 
 from collections.abc import Callable
 
@@ -32,7 +32,7 @@ def test_profile_supplies_defaults(
 def test_explicit_value_overrides_profile(make_settings: Callable[..., Settings]) -> None:
     settings = make_settings(resource_profile="large", max_rps=42)
     assert settings.max_rps == 42
-    assert settings.api_workers == 2  # the rest still comes from the profile
+    assert settings.api_workers == 2  # остальное по-прежнему из профиля
 
 
 def test_environment_variable_overrides_profile(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -40,7 +40,7 @@ def test_environment_variable_overrides_profile(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("JWT_SECRET", "s" * 40)
     monkeypatch.setenv("RESOURCE_PROFILE", "medium")
     monkeypatch.setenv("MAX_BANDWIDTH_MBIT", "900")
-    monkeypatch.setenv("MAX_CONCURRENCY", "")  # blank in .env means "use profile"
+    monkeypatch.setenv("MAX_CONCURRENCY", "")  # пустое значение в .env — «взять из профиля»
     settings = Settings(_env_file=None)
     assert settings.max_bandwidth_mbit == 900
     assert settings.max_concurrency == PROFILE_DEFAULTS[ResourceProfile.MEDIUM]["max_concurrency"]

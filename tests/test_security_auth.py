@@ -1,4 +1,4 @@
-"""Password hashing and JWT access tokens."""
+"""Хэширование паролей и JWT-токены."""
 
 import uuid
 from collections.abc import Callable

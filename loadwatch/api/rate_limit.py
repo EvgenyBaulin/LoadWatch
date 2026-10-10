@@ -1,6 +1,6 @@
-"""In-memory sliding-window rate limiter.
+"""Ограничение частоты запросов скользящим окном в памяти процесса.
 
-Limits are per API worker process and reset on restart; see docs/SECURITY.md.
+Счётчики свои у каждого воркера API и обнуляются при перезапуске (см. docs/SECURITY.md).
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from loadwatch.errors import RateLimitedError
 
 
 class SlidingWindowRateLimiter:
-    """Allow at most ``limit`` hits per ``window_sec`` for each key."""
+    """Не больше ``limit`` обращений за ``window_sec`` секунд на каждый ключ."""
 
     def __init__(
         self,
@@ -32,10 +32,10 @@ class SlidingWindowRateLimiter:
         self._max_keys = max_keys
         self._clock = clock
         self._hits: dict[str, deque[float]] = {}
-        self._lock = threading.Lock()  # sync endpoints run in a thread pool
+        self._lock = threading.Lock()  # sync-эндпоинты выполняются в пуле потоков
 
     def hit(self, key: str) -> None:
-        """Record a hit for ``key`` or raise :class:`RateLimitedError`."""
+        """Учитывает обращение по ``key`` или бросает :class:`RateLimitedError`."""
         now = self._clock()
         with self._lock:
             hits = self._hits.get(key)
@@ -43,8 +43,8 @@ class SlidingWindowRateLimiter:
                 if len(self._hits) >= self._max_keys:
                     self._evict_expired(now)
                 if len(self._hits) >= self._max_keys:
-                    # Table full of active clients (likely an attack): refuse new ones
-                    # instead of evicting live counters, which would reset their limits.
+                    # Таблица забита активными клиентами (похоже на атаку): отказываем новым,
+                    # а не вытесняем живые счётчики — иначе им бы сбросился лимит.
                     raise RateLimitedError(retry_after=math.ceil(self.window_sec))
                 hits = self._hits.setdefault(key, deque())
             while hits and now - hits[0] >= self.window_sec:
@@ -55,16 +55,16 @@ class SlidingWindowRateLimiter:
             hits.append(now)
 
     def reset(self) -> None:
-        """Forget all hits (used by tests)."""
+        """Забывает все обращения (для тестов)."""
         with self._lock:
             self._hits.clear()
 
     def _evict_expired(self, now: float) -> None:
-        """Drop keys whose hits have all left the window."""
+        """Удаляет ключи, у которых все обращения вышли из окна."""
         for key in [k for k, v in self._hits.items() if not v or now - v[-1] >= self.window_sec]:
             del self._hits[key]
 
 
 def client_key(request: Request) -> str:
-    """Identify the client by IP (uvicorn sets it from X-Forwarded-For behind Nginx)."""
+    """Клиент определяется по IP (за Nginx uvicorn берёт его из X-Forwarded-For)."""
     return request.client.host if request.client else "unknown"

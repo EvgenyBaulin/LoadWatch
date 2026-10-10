@@ -1,4 +1,4 @@
-"""Request and response models for authentication and user preferences."""
+"""Схемы API для входа, регистрации и настроек пользователя."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ Locale = Literal["ru", "en"]
 
 
 def _check_timezone(value: str) -> str:
-    """Accept only IANA time zone names known to ``zoneinfo``."""
+    """Принимает только известные ``zoneinfo`` имена часовых поясов IANA."""
     try:
         ZoneInfo(value)
     except (ZoneInfoNotFoundError, ValueError) as exc:
@@ -22,12 +22,12 @@ def _check_timezone(value: str) -> str:
 
 
 def _strip(value: object) -> object:
-    """Trim surrounding whitespace of e-mails and codes (never of passwords)."""
+    """Обрезает пробелы по краям e-mail и кодов (но никогда — паролей)."""
     return value.strip() if isinstance(value, str) else value
 
 
 class RegisterRequest(BaseModel):
-    """New account; the password is kept exactly as typed."""
+    """Новый аккаунт; пароль сохраняется ровно как введён."""
 
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
@@ -38,7 +38,7 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    """Credentials for an access token."""
+    """Данные для получения токена."""
 
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
@@ -47,7 +47,7 @@ class LoginRequest(BaseModel):
 
 
 class UserOut(BaseModel):
-    """Public view of the current user."""
+    """Текущий пользователь в ответах API."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -59,7 +59,7 @@ class UserOut(BaseModel):
 
 
 class AuthResponse(BaseModel):
-    """Access token plus the authenticated user."""
+    """Токен доступа и пользователь."""
 
     access_token: str
     token_type: Literal["bearer"] = "bearer"  # noqa: S105
@@ -68,7 +68,7 @@ class AuthResponse(BaseModel):
 
 
 class PreferencesUpdate(BaseModel):
-    """Partial update of user preferences."""
+    """Частичное обновление настроек пользователя."""
 
     locale: Locale | None = None
     timezone: str | None = Field(default=None, max_length=64)

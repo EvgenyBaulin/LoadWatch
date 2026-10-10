@@ -1,8 +1,8 @@
-"""Application settings loaded from the environment and resource profiles.
+"""Настройки приложения из переменных окружения и профили ресурсов.
 
-Every hard limit lives here. ``RESOURCE_PROFILE`` supplies defaults for the
-resource-bound limits; each of them can still be overridden by its own
-environment variable.
+Все жёсткие лимиты живут здесь. ``RESOURCE_PROFILE`` задаёт значения по
+умолчанию для лимитов, зависящих от железа; каждый из них можно переопределить
+своей переменной окружения.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ResourceProfile(StrEnum):
-    """Hardware tier the service is tuned for."""
+    """Тариф сервера, под который настроен сервис."""
 
     SMALL = "small"
     MEDIUM = "medium"
@@ -26,7 +26,7 @@ class ResourceProfile(StrEnum):
 
 
 class RegistrationMode(StrEnum):
-    """Who may create an account."""
+    """Кто может зарегистрироваться."""
 
     OPEN = "open"
     CLOSED = "closed"
@@ -34,15 +34,15 @@ class RegistrationMode(StrEnum):
 
 
 class Environment(StrEnum):
-    """Deployment environment."""
+    """Окружение развёртывания."""
 
     DEVELOPMENT = "development"
     PRODUCTION = "production"
 
 
-# Starting values; real generator ceilings are measured by scripts/benchmark_runner.py.
+# Стартовые значения; реальный потолок генератора меряет scripts/benchmark_runner.py.
 PROFILE_DEFAULTS: Final[dict[ResourceProfile, dict[str, int]]] = {
-    # 1 vCPU, 1 GB RAM, 200 Mbit/s
+    # 1 vCPU, 1 ГБ RAM, 200 Мбит/с
     ResourceProfile.SMALL: {
         "max_rps": 150,
         "max_concurrency": 100,
@@ -52,7 +52,7 @@ PROFILE_DEFAULTS: Final[dict[ResourceProfile, dict[str, int]]] = {
         "api_workers": 1,
         "db_pool_size": 5,
     },
-    # Same CPU/RAM, 1 Gbit/s link: bandwidth cap rises, RPS stays CPU-bound.
+    # Те же CPU и RAM, канал 1 Гбит/с: растёт лимит полосы, RPS упирается в процессор.
     ResourceProfile.MEDIUM: {
         "max_rps": 150,
         "max_concurrency": 100,
@@ -62,7 +62,7 @@ PROFILE_DEFAULTS: Final[dict[ResourceProfile, dict[str, int]]] = {
         "api_workers": 1,
         "db_pool_size": 5,
     },
-    # 1 vCPU, 2 GB RAM: second API worker and more concurrent connections.
+    # 1 vCPU, 2 ГБ RAM: второй воркер API и больше одновременных соединений.
     ResourceProfile.LARGE: {
         "max_rps": 200,
         "max_concurrency": 200,
@@ -78,13 +78,13 @@ ENV_FILE_VARIABLE: Final = "LOADWATCH_ENV_FILE"
 
 
 def _env_file() -> str | None:
-    """Return the dotenv path to read; an empty ``LOADWATCH_ENV_FILE`` disables it."""
+    """Путь к dotenv-файлу; пустой ``LOADWATCH_ENV_FILE`` отключает чтение файла."""
     value = os.environ.get(ENV_FILE_VARIABLE, ".env")
     return value or None
 
 
 class Settings(BaseSettings):
-    """All runtime configuration of LoadWatch."""
+    """Вся конфигурация LoadWatch."""
 
     model_config = SettingsConfigDict(
         env_file=_env_file(),
@@ -105,6 +105,7 @@ class Settings(BaseSettings):
     registration_mode: RegistrationMode = RegistrationMode.OPEN
     registration_invite_code: SecretStr | None = None
     auth_rate_limit_per_minute: int = Field(default=10, ge=1)
+    verify_rate_limit_per_minute: int = Field(default=6, ge=1)
 
     resource_profile: ResourceProfile = ResourceProfile.SMALL
     max_rps: int = Field(ge=1)
@@ -137,14 +138,14 @@ class Settings(BaseSettings):
     @model_validator(mode="before")
     @classmethod
     def _apply_profile_defaults(cls, data: Any) -> Any:
-        """Fill resource limits from the selected profile unless set explicitly."""
+        """Заполняет лимиты из профиля, если они не заданы явно."""
         if not isinstance(data, dict):
             return data
         raw_profile = data.get("resource_profile") or ResourceProfile.SMALL
         try:
             profile = ResourceProfile(str(raw_profile).lower())
         except ValueError:
-            return data  # field validation reports the bad profile name
+            return data  # неверное имя профиля сообщит валидация поля
         for name, value in PROFILE_DEFAULTS[profile].items():
             if data.get(name) in (None, ""):
                 data[name] = value
@@ -159,13 +160,13 @@ class Settings(BaseSettings):
     )
     @classmethod
     def _blank_to_none(cls, value: Any) -> Any:
-        """Treat empty variables from the template as unset."""
+        """Пустые переменные из шаблона считаются незаданными."""
         return None if value == "" else value
 
     @field_validator("secrets_encryption_key")
     @classmethod
     def _check_fernet_key(cls, value: SecretStr | None) -> SecretStr | None:
-        """Reject keys that Fernet cannot use, so the error shows at startup."""
+        """Отклоняет ключи, непригодные для Fernet, чтобы ошибка была видна при старте."""
         if value is not None:
             try:
                 Fernet(value.get_secret_value().encode())
@@ -175,18 +176,18 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _check_invite_mode(self) -> Settings:
-        """Invite mode is useless without a code."""
+        """Режим приглашений без кода бессмыслен."""
         if self.registration_mode is RegistrationMode.INVITE and not self.registration_invite_code:
             raise ValueError("REGISTRATION_INVITE_CODE is required when REGISTRATION_MODE=invite")
         return self
 
     @property
     def cors_origin_list(self) -> list[str]:
-        """CORS origins as a list."""
+        """Разрешённые CORS origin списком."""
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return process-wide settings (read once)."""
+    """Настройки процесса (читаются один раз)."""
     return Settings()

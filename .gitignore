@@ -1,4 +1,4 @@
-# Secrets
+# Секреты
 .env
 .env.*
 !.env.example
@@ -18,21 +18,17 @@ dist/
 coverage.xml
 htmlcov/
 
-# Frontend
+# Фронтенд
 node_modules/
 frontend/dist/
 *.local
 
-# Runtime
+# Файлы времени выполнения
 logs/
 *.log
 reports/
 
-# OS / editors
+# ОС и редакторы
 .DS_Store
 .idea/
 .vscode/
-
-# Task statement stays local
-
-# Owner's working docs stay local; project documentation in docs/ is public

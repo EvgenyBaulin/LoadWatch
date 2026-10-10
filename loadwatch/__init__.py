@@ -1,3 +1,3 @@
-"""LoadWatch: website performance monitoring through scheduled load tests."""
+"""LoadWatch: мониторинг производительности сайтов регулярными нагрузочными тестами."""
 
 __version__ = "0.1.0"

@@ -1,4 +1,4 @@
-"""Database engine, session factory and declarative base."""
+"""Движок БД, фабрика сессий и базовый класс моделей."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sess
 
 from loadwatch.config import Settings
 
-# Stable constraint names keep Alembic migrations deterministic.
+# Стабильные имена ограничений делают миграции Alembic воспроизводимыми.
 NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
     "uq": "uq_%(table_name)s_%(column_0_name)s",
@@ -21,22 +21,22 @@ NAMING_CONVENTION = {
 
 
 def utcnow() -> datetime:
-    """Return the current time as an aware UTC datetime."""
+    """Текущее время в UTC (aware datetime)."""
     return datetime.now(UTC)
 
 
 class UtcDateTime(TypeDecorator[datetime]):
-    """``timestamptz`` that always comes back in UTC.
+    """``timestamptz``, который всегда возвращается в UTC.
 
-    PostgreSQL returns ``timestamptz`` in the session time zone, which depends on
-    the server or pooler configuration; normalising here keeps the API in UTC.
+    PostgreSQL отдаёт ``timestamptz`` в часовом поясе сессии, а он зависит от
+    настроек сервера или пулера; нормализация здесь держит API в UTC.
     """
 
     impl = DateTime(timezone=True)
     cache_ok = True
 
     def process_bind_param(self, value: datetime | None, dialect: Dialect) -> datetime | None:
-        """Reject naive datetimes and store aware ones as UTC."""
+        """Отклоняет наивные datetime, aware сохраняет в UTC."""
         if value is None:
             return None
         if value.tzinfo is None:
@@ -44,18 +44,18 @@ class UtcDateTime(TypeDecorator[datetime]):
         return value.astimezone(UTC)
 
     def process_result_value(self, value: Any, dialect: Dialect) -> datetime | None:
-        """Convert loaded values to UTC."""
+        """Переводит прочитанные значения в UTC."""
         return value.astimezone(UTC) if isinstance(value, datetime) else None
 
 
 class Base(DeclarativeBase):
-    """Declarative base for all ORM models."""
+    """Базовый класс всех ORM-моделей."""
 
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
 class TimestampMixin:
-    """``created_at`` / ``updated_at`` columns stored in UTC."""
+    """Колонки ``created_at`` / ``updated_at`` в UTC."""
 
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
@@ -64,7 +64,7 @@ class TimestampMixin:
 
 
 def create_db_engine(settings: Settings) -> Engine:
-    """Create the SQLAlchemy engine sized by the resource profile."""
+    """Создаёт движок SQLAlchemy с пулом по профилю ресурсов."""
     return create_engine(
         settings.database_url,
         pool_size=settings.db_pool_size,
@@ -74,5 +74,5 @@ def create_db_engine(settings: Settings) -> Engine:
 
 
 def create_session_factory(engine: Engine) -> sessionmaker[Session]:
-    """Create a session factory bound to ``engine``."""
+    """Создаёт фабрику сессий для ``engine``."""
     return sessionmaker(bind=engine, expire_on_commit=False)

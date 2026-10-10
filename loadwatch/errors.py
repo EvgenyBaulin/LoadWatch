@@ -1,8 +1,8 @@
-"""Domain errors with stable machine-readable codes.
+"""Ошибки предметной области со стабильными машинными кодами.
 
-Services raise these; the API layer turns them into
-``{"error": {"code": ..., "message": ...}}`` responses. The frontend translates
-messages by ``code``, so codes must never change once released.
+Их бросают сервисы, а слой API превращает в ответы
+``{"error": {"code": ..., "message": ...}}``. Фронтенд переводит сообщения по
+``code``, поэтому выпущенные коды менять нельзя.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from typing import Any
 
 
 class AppError(Exception):
-    """Base class for expected, user-facing errors."""
+    """Базовый класс ожидаемых ошибок, которые видит пользователь."""
 
     code: str = "internal_error"
     status_code: int = 500
@@ -24,7 +24,7 @@ class AppError(Exception):
 
 
 class NotAuthenticatedError(AppError):
-    """No valid credentials were supplied."""
+    """Не передан действительный токен."""
 
     code = "not_authenticated"
     status_code = 401
@@ -32,7 +32,7 @@ class NotAuthenticatedError(AppError):
 
 
 class InvalidCredentialsError(AppError):
-    """E-mail and password do not match."""
+    """E-mail и пароль не совпадают."""
 
     code = "invalid_credentials"
     status_code = 401
@@ -40,7 +40,7 @@ class InvalidCredentialsError(AppError):
 
 
 class EmailTakenError(AppError):
-    """An account with this e-mail already exists."""
+    """Аккаунт с таким e-mail уже есть."""
 
     code = "email_taken"
     status_code = 409
@@ -48,7 +48,7 @@ class EmailTakenError(AppError):
 
 
 class RegistrationClosedError(AppError):
-    """Registration is disabled by ``REGISTRATION_MODE=closed``."""
+    """Регистрация выключена: ``REGISTRATION_MODE=closed``."""
 
     code = "registration_closed"
     status_code = 403
@@ -56,7 +56,7 @@ class RegistrationClosedError(AppError):
 
 
 class InvalidInviteCodeError(AppError):
-    """``REGISTRATION_MODE=invite`` and the code is missing or wrong."""
+    """Включён ``REGISTRATION_MODE=invite``, а код не передан или неверен."""
 
     code = "invalid_invite_code"
     status_code = 403
@@ -64,7 +64,7 @@ class InvalidInviteCodeError(AppError):
 
 
 class RateLimitedError(AppError):
-    """Too many requests from one client."""
+    """Слишком много запросов от одного клиента."""
 
     code = "rate_limited"
     status_code = 429
@@ -76,8 +76,40 @@ class RateLimitedError(AppError):
 
 
 class NotFoundError(AppError):
-    """The object does not exist or belongs to someone else."""
+    """Объекта нет или он принадлежит другому пользователю."""
 
     code = "not_found"
     status_code = 404
     message = "Not found"
+
+
+class InvalidSiteUrlError(AppError):
+    """URL сайта не подходит: нужен origin вида ``https://example.com``."""
+
+    code = "invalid_site_url"
+    status_code = 422
+    message = "Site URL must be an http(s) origin without path, query or credentials"
+
+
+class ForbiddenTargetError(AppError):
+    """Адрес ведёт во внутреннюю сеть или на localhost (защита от SSRF)."""
+
+    code = "target_forbidden"
+    status_code = 422
+    message = "This address is not allowed: it points to a private or local network"
+
+
+class SiteExistsError(AppError):
+    """У пользователя уже есть сайт с таким адресом."""
+
+    code = "site_exists"
+    status_code = 409
+    message = "This site has already been added"
+
+
+class VerificationFailedError(AppError):
+    """Владение не подтверждено; причина — в ``details.reason``."""
+
+    code = "verification_failed"
+    status_code = 422
+    message = "Ownership verification failed"

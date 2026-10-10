@@ -1,4 +1,4 @@
-"""Registration, login and user preferences."""
+"""Регистрация, вход и настройки пользователя."""
 
 from __future__ import annotations
 
@@ -23,12 +23,12 @@ from loadwatch.security.tokens import InvalidTokenError, create_access_token, de
 
 
 def normalize_email(email: str) -> str:
-    """Lower-case and trim an e-mail so uniqueness is case-insensitive."""
+    """Приводит e-mail к нижнему регистру и обрезает пробелы."""
     return email.strip().lower()
 
 
 class AuthService:
-    """Account lifecycle; owns the database transaction."""
+    """Жизненный цикл аккаунта; управляет транзакцией."""
 
     def __init__(self, session: Session, settings: Settings) -> None:
         self._session = session
@@ -36,7 +36,7 @@ class AuthService:
         self._users = UserRepository(session)
 
     def register(self, data: RegisterRequest) -> AuthResponse:
-        """Create an account according to ``REGISTRATION_MODE`` and log it in."""
+        """Создаёт аккаунт с учётом ``REGISTRATION_MODE`` и сразу выдаёт токен."""
         self._check_registration_allowed(data.invite_code)
         email = normalize_email(data.email)
         if self._users.get_by_email(email) is not None:
@@ -45,20 +45,20 @@ class AuthService:
         try:
             self._users.add(user)
             self._session.commit()
-        except IntegrityError as exc:  # concurrent registration with the same e-mail
+        except IntegrityError as exc:  # параллельная регистрация с тем же e-mail
             self._session.rollback()
             raise EmailTakenError() from exc
         return self._auth_response(user)
 
     def login(self, email: str, password: str) -> AuthResponse:
-        """Exchange credentials for an access token."""
+        """Выдаёт токен по e-mail и паролю."""
         user = self._users.get_by_email(normalize_email(email))
         if not verify_password(user.password_hash if user else None, password) or user is None:
             raise InvalidCredentialsError()
         return self._auth_response(user)
 
     def authenticate(self, token: str) -> User:
-        """Return the user behind an access token."""
+        """Пользователь, которому выдан токен."""
         try:
             user_id = decode_access_token(token, self._settings)
         except InvalidTokenError as exc:
@@ -69,7 +69,7 @@ class AuthService:
         return user
 
     def update_preferences(self, user: User, data: PreferencesUpdate) -> User:
-        """Change locale and/or time zone of ``user``."""
+        """Меняет язык и/или часовой пояс пользователя."""
         if data.locale is not None:
             user.locale = data.locale
         if data.timezone is not None:

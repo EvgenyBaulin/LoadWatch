@@ -47,22 +47,23 @@ packages = ["loadwatch"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = ["frontend", "alembic/versions"]
+extend-exclude = ["frontend"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "S", "SIM", "RUF", "D"]
-ignore = ["D105", "D107", "D203", "D213"]
+# RUF001-003: комментарии и docstring'и пишутся по-русски, кириллица — не опечатка.
+ignore = ["D105", "D107", "D203", "D213", "RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106", "D"]
+"tests/**" = ["S101", "S104", "S105", "S106", "D"]
 "demo_target/**" = ["S311"]
-"scripts/**" = ["T20", "RUF001"]  # user-facing Russian output
+"scripts/**" = ["T20"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
-exclude = ["frontend/", "alembic/versions/"]
+exclude = ["frontend/"]
 
 [[tool.mypy.overrides]]
 module = ["reportlab.*", "dns.*"]
@@ -74,7 +75,7 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "-ra --strict-markers"
 filterwarnings = [
-    # Starlette's TestClient nudges towards httpx2; LoadWatch deliberately uses httpx.
+    # TestClient из Starlette предлагает httpx2; LoadWatch намеренно использует httpx.
     "ignore:Using `httpx` with `starlette.testclient` is deprecated",
 ]
 

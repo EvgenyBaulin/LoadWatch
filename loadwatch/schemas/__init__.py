@@ -1,1 +1,1 @@
-"""Pydantic request and response models of the REST API."""
+"""Pydantic-схемы запросов и ответов REST API."""

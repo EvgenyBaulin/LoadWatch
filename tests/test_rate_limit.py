@@ -1,4 +1,4 @@
-"""In-memory sliding-window rate limiter."""
+"""Ограничение частоты скользящим окном."""
 
 import pytest
 
@@ -31,7 +31,7 @@ def test_window_slides() -> None:
     limiter.hit("ip")
     clock.now += 30
     limiter.hit("ip")
-    clock.now += 31  # the first hit has left the window
+    clock.now += 31  # первое обращение вышло из окна
     limiter.hit("ip")
     with pytest.raises(RateLimitedError):
         limiter.hit("ip")
@@ -50,12 +50,12 @@ def test_memory_is_bounded_without_resetting_active_clients() -> None:
     limiter = SlidingWindowRateLimiter(1, 60, max_keys=10, clock=clock)
     for i in range(10):
         limiter.hit(f"ip-{i}")
-    with pytest.raises(RateLimitedError):  # full of active clients: new key refused
+    with pytest.raises(RateLimitedError):  # таблица заполнена активными клиентами: новому отказ
         limiter.hit("newcomer")
-    with pytest.raises(RateLimitedError):  # existing client keeps its limit
+    with pytest.raises(RateLimitedError):  # у известного клиента лимит не сбросился
         limiter.hit("ip-0")
     assert len(limiter._hits) == 10
-    clock.now += 61  # everyone expired: room again
+    clock.now += 61  # все устарели — место снова есть
     limiter.hit("newcomer")
     assert len(limiter._hits) == 1
 

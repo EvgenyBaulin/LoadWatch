@@ -1,4 +1,4 @@
-"""User account model."""
+"""Модель пользователя."""
 
 from __future__ import annotations
 
@@ -13,13 +13,13 @@ SUPPORTED_LOCALES = ("ru", "en")
 
 
 class User(TimestampMixin, Base):
-    """A registered account; owns sites, scenarios and notification channels."""
+    """Аккаунт; владеет сайтами, сценариями и каналами уведомлений."""
 
     __tablename__ = "users"
     __table_args__ = (CheckConstraint("locale IN ('ru', 'en')", name="locale"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    # Stored lower-cased; uniqueness is therefore case-insensitive.
+    # Хранится в нижнем регистре, поэтому уникальность не зависит от регистра.
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     locale: Mapped[str] = mapped_column(String(2), nullable=False, default="en")

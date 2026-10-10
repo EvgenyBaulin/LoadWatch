@@ -1,10 +1,10 @@
 default_install_hook_types: [pre-commit, commit-msg]
 default_stages: [pre-commit]
-# Vendored files (fonts and their license) are kept byte-for-byte as upstream.
+# Чужие файлы (шрифты и их лицензия) хранятся байт в байт как в оригинале.
 exclude: ^loadwatch/assets/fonts/
 
 repos:
-  # Commits must be authored by the project owner; no co-author trailers.
+  # Автор и коммиттер — владелец проекта; соавторы в сообщениях не указываются.
   - repo: local
     hooks:
       - id: check-author
@@ -31,7 +31,7 @@ repos:
         args: [--maxkb=1024]
       - id: detect-private-key
 
-  # ruff and mypy run from the uv environment so versions match uv.lock and CI.
+  # ruff и mypy запускаются из окружения uv, поэтому версии совпадают с uv.lock и CI.
   - repo: local
     hooks:
       - id: ruff

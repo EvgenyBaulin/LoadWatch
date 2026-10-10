@@ -1,1 +1,1 @@
-"""Business logic. Routers call services; services call repositories."""
+"""Бизнес-логика. Роутеры вызывают сервисы, сервисы — репозитории."""

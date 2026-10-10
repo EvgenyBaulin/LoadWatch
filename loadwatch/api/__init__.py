@@ -1,1 +1,1 @@
-"""REST API (FastAPI)."""
+"""REST API на FastAPI."""

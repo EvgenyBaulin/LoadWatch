@@ -1,4 +1,4 @@
-"""Map every error to ``{"error": {"code", "message", "details"?}}``."""
+"""Приводит любую ошибку к виду ``{"error": {"code", "message", "details"?}}``."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from loadwatch.errors import AppError, RateLimitedError
 
 logger = logging.getLogger(__name__)
 
-# Codes for errors raised by the framework itself (unknown route, wrong method, ...).
+# Коды для ошибок самого фреймворка (нет маршрута, не тот метод и т. п.).
 _HTTP_STATUS_CODES = {
     400: "bad_request",
     401: "not_authenticated",
@@ -30,7 +30,7 @@ _HTTP_STATUS_CODES = {
 
 
 def error_body(code: str, message: str, details: Any = None) -> dict[str, Any]:
-    """Build the unified error payload."""
+    """Собирает тело ошибки в едином формате."""
     error: dict[str, Any] = {"code": code, "message": message}
     if details is not None:
         error["details"] = details
@@ -38,7 +38,7 @@ def error_body(code: str, message: str, details: Any = None) -> dict[str, Any]:
 
 
 def _validation_details(exc: RequestValidationError) -> list[dict[str, Any]]:
-    # Input values are left out on purpose: they may contain passwords or secrets.
+    # Введённые значения намеренно не возвращаем: там могут быть пароли и секреты.
     return [
         {"loc": list(err.get("loc", ())), "type": err.get("type"), "msg": err.get("msg")}
         for err in exc.errors()
@@ -78,8 +78,8 @@ async def _unhandled_error(request: Request, exc: Exception) -> JSONResponse:
 async def _catch_unhandled(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
-    # Starlette handles bare exceptions in the outermost middleware, outside CORS,
-    # so browsers could not read the 500 body; catching here keeps CORS headers.
+    # Starlette ловит необработанные исключения в самом внешнем middleware, снаружи
+    # CORS, и браузер не смог бы прочитать тело 500; ловим здесь, внутри CORS.
     try:
         return await call_next(request)
     except Exception as exc:
@@ -87,7 +87,7 @@ async def _catch_unhandled(
 
 
 def register_error_handlers(app: FastAPI) -> None:
-    """Install the handlers on ``app``; add CORS middleware after this call."""
+    """Ставит обработчики на ``app``; CORS-middleware добавлять после этого вызова."""
     app.add_exception_handler(AppError, _app_error)
     app.add_exception_handler(RequestValidationError, _validation_error)
     app.add_exception_handler(StarletteHTTPException, _http_error)

@@ -1,4 +1,4 @@
-"""``/health``: liveness and database reachability."""
+"""``/health``: жив ли сервис и отвечает ли база."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class HealthOut(BaseModel):
-    """Service status."""
+    """Состояние сервиса."""
 
     status: Literal["ok", "degraded"]
     database: Literal["ok", "unavailable"]
@@ -27,7 +27,7 @@ class HealthOut(BaseModel):
 
 @router.get("/health")
 def health(session: SessionDep, response: Response) -> HealthOut:
-    """Return 200 when the database answers, 503 otherwise."""
+    """200, если база отвечает, иначе 503."""
     try:
         session.execute(text("SELECT 1"))
     except SQLAlchemyError:
