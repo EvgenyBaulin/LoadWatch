@@ -19,7 +19,7 @@ RUN npm run build
 
 # --- 2. Заголовки безопасности: CSP с хэшем inline-скрипта темы ----------------------
 # Хэш считается по собранному index.html, поэтому всегда совпадает с тем, что отдаётся.
-FROM python:3.12-alpine AS headers
+FROM python:3.14-alpine AS headers
 COPY deploy/gen_security_headers.py /gen.py
 COPY --from=build /src/frontend/dist/index.html /index.html
 RUN python /gen.py /index.html > /security-headers.conf
