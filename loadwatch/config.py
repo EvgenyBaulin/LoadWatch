@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     )
 
     environment: Environment = Environment.DEVELOPMENT
-    database_url: str
+    database_url: str = Field(min_length=1)
     jwt_secret: SecretStr = Field(min_length=32)
     jwt_expire_minutes: int = Field(default=720, ge=5, le=60 * 24 * 30)
     jwt_algorithm: Literal["HS256"] = "HS256"
