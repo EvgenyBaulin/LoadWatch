@@ -8,7 +8,7 @@
 # Адрес API внутри сети compose задаётся при сборке: --build-arg API_UPSTREAM=api:8000.
 
 # --- 1. Сборка статики ---------------------------------------------------------------
-FROM node:24-bookworm-slim AS build
+FROM node:25-bookworm-slim AS build
 WORKDIR /src/frontend
 # Сначала только манифесты: слой с node_modules кэшируется, пока не изменится lock.
 COPY frontend/package.json frontend/package-lock.json ./
