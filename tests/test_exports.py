@@ -419,3 +419,73 @@ def test_maintenance_cli(monkeypatch: pytest.MonkeyPatch, clean_database: str) -
         assert main() == 0
     finally:
         config.get_settings.cache_clear()
+
+
+def test_pdf_survives_long_and_multiline_text(api: TestClient, owner: dict[str, str]) -> None:
+    site_id = api.post(
+        "/api/v1/sites", json={"url": "https://long.example", "name": "x"}, headers=owner
+    ).json()["id"]
+    long_path = "/" + "a" * 1900
+    scenario = api.post(
+        f"/api/v1/sites/{site_id}/scenarios",
+        json={
+            "name": "строка " * 14,
+            "load_profile": {"type": "constant", "rate": 1, "duration_sec": 1},
+            "flow": [{"name": "<b>шаг</b>", "path": long_path}],
+            "apdex_t_ms": 300,
+        },
+        headers=owner,
+    ).json()
+    run_id = str(uuid.uuid4())
+    with api.app.state.engine.begin() as connection:  # type: ignore[attr-defined]
+        connection.execute(
+            text(
+                "INSERT INTO test_runs (id, site_id, scenario_id, status, source, params, generator_saturated,"
+                " cancel_requested, queued_at, created_at, updated_at) VALUES (:id, :site, :sc, 'failed', 'manual',"
+                " CAST(:params AS jsonb), false, false, now(), now(), now())"
+            ),
+            {
+                "id": run_id,
+                "site": site_id,
+                "sc": scenario["id"],
+                "params": json.dumps(
+                    {
+                        "profile": {"type": "constant"},
+                        "flow": scenario["flow"] * 10,
+                        "apdex_t_ms": 300,
+                    }
+                ),
+            },
+        )
+    response = api.get(f"/api/v1/runs/{run_id}/report.pdf", headers=owner)
+    assert response.status_code == 200 and response.content.startswith(b"%PDF")
+
+
+def test_pdf_uses_slo_snapshot_and_apdex_t(api: TestClient, owner: dict[str, str]) -> None:
+    _, run_id = setup_run(api, owner)
+    with api.app.state.engine.begin() as connection:  # type: ignore[attr-defined]
+        connection.execute(
+            text(
+                "UPDATE run_metrics SET summary = summary || CAST(:slo AS jsonb) WHERE run_id = :id"
+            ),
+            {"id": run_id, "slo": json.dumps({"slo": {"p95_ms": 777, "max_error_rate": None}})},
+        )
+        connection.execute(
+            text("UPDATE test_runs SET params = params || CAST(:p AS jsonb) WHERE id = :id"),
+            {"id": run_id, "p": json.dumps({"apdex_t_ms": 250})},
+        )
+    content = pdf_text(api.get(f"/api/v1/runs/{run_id}/report.pdf", headers=owner).content)
+    assert "p95 ≤ 777" in content  # цель на момент запуска, а не текущая (100)
+    assert "T = 250" in " ".join(content.split())  # ячейка может перенести «мс» на новую строку
+
+
+def test_site_csv_too_large(
+    api: TestClient, owner: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import loadwatch.services.export_service as export_service
+
+    site_id, _ = setup_run(api, owner)
+    monkeypatch.setattr(export_service, "MAX_EXPORT_ROWS", 0)
+    assert_error(
+        api.get(f"/api/v1/sites/{site_id}/export.csv", headers=owner), 422, "export_too_large"
+    )

@@ -6,11 +6,16 @@ import uuid
 from datetime import datetime, timedelta
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from loadwatch.config import Settings
 from loadwatch.db import utcnow
-from loadwatch.errors import InvalidPeriodError, NotFoundError, RunHasNoMetricsError
+from loadwatch.errors import (
+    ExportTooLargeError,
+    InvalidPeriodError,
+    NotFoundError,
+    RunHasNoMetricsError,
+)
 from loadwatch.models import RunMetrics, Scenario, Site, TestRun, User
 from loadwatch.reports.csv_export import run_csv, site_csv
 from loadwatch.reports.pdf_report import build_run_report
@@ -61,8 +66,12 @@ class ExportService:
                 TestRun.site_id == site.id, TestRun.queued_at >= since, TestRun.queued_at <= until
             )
             .order_by(TestRun.queued_at)
-            .limit(MAX_EXPORT_ROWS)
+            # Большие JSON (параметры, сводка, ряд) для CSV не нужны — не грузим их в память.
+            .options(defer(TestRun.params), defer(RunMetrics.summary), defer(RunMetrics.series))
+            .limit(MAX_EXPORT_ROWS + 1)
         ).all()
+        if len(rows) > MAX_EXPORT_ROWS:
+            raise ExportTooLargeError(details={"max_rows": MAX_EXPORT_ROWS})
         scenarios = {
             scenario.id: scenario
             for scenario in self._session.scalars(
@@ -98,11 +107,7 @@ class ExportService:
             params=run.params,
             summary=metrics.summary if metrics else None,
             series=metrics.series if metrics else None,
-            slo={
-                "met": run.slo_met,
-                "p95_target": scenario.slo_p95_ms if scenario else None,
-                "error_rate_target": scenario.slo_max_error_rate if scenario else None,
-            },
+            slo=_slo_targets(run, metrics, scenario),
             regression=run.regression,
             generated_at=utcnow(),
         )
@@ -113,6 +118,24 @@ class ExportService:
         if run is None:
             raise NotFoundError()
         return run
+
+
+def _slo_targets(
+    run: TestRun, metrics: RunMetrics | None, scenario: Scenario | None
+) -> dict[str, object]:
+    """Цели SLO, действовавшие при запуске; для старых запусков — текущие цели сценария."""
+    snapshot = (metrics.summary.get("slo") if metrics else None) or {}
+    if snapshot:
+        return {
+            "met": run.slo_met,
+            "p95_target": snapshot.get("p95_ms"),
+            "error_rate_target": snapshot.get("max_error_rate"),
+        }
+    return {
+        "met": run.slo_met,
+        "p95_target": scenario.slo_p95_ms if scenario else None,
+        "error_rate_target": scenario.slo_max_error_rate if scenario else None,
+    }
 
 
 def _safe_filename(name: str) -> str:

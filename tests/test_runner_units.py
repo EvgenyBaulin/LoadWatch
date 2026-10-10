@@ -133,3 +133,39 @@ def test_lag_monitor_counts_fully_blocked_seconds_as_bad() -> None:
         monitor._current = []
         monitor.close_second()
     assert monitor.saturated
+
+
+class FakeClocks:
+    def __init__(self) -> None:
+        self.cpu = 0.0
+        self.wall = 0.0
+
+    def tick(self, wall: float, cpu: float) -> None:
+        self.wall += wall
+        self.cpu += cpu
+
+
+def test_cpu_bound_generator_is_saturated_even_without_lag() -> None:
+    """Event loop просыпается вовремя, но процесс занял ядро целиком — это насыщение."""
+    clocks = FakeClocks()
+    monitor = LagMonitor(
+        50, 3, cpu_threshold=0.9, cpu_clock=lambda: clocks.cpu, wall_clock=lambda: clocks.wall
+    )
+    for _ in range(3):
+        clocks.tick(wall=1.0, cpu=0.97)
+        monitor._current = [2.0, 3.0]
+        monitor.close_second()
+    assert monitor.saturated
+    assert monitor.summary()["cpu_max"] == 0.97
+
+
+def test_moderate_cpu_is_fine() -> None:
+    clocks = FakeClocks()
+    monitor = LagMonitor(
+        50, 3, cpu_threshold=0.9, cpu_clock=lambda: clocks.cpu, wall_clock=lambda: clocks.wall
+    )
+    for cpu in (0.5, 0.95, 0.6, 0.95, 0.95, 0.4):
+        clocks.tick(wall=1.0, cpu=cpu)
+        monitor._current = [2.0]
+        monitor.close_second()
+    assert not monitor.saturated

@@ -33,8 +33,9 @@ class RunLimits:
 
     max_concurrency: int
     max_bandwidth_mbit: float
-    lag_threshold_ms: float = 50.0
-    saturation_seconds: int = 3  # столько секунд подряд лаг выше порога — генератор насыщен
+    lag_threshold_ms: float = 3.0
+    saturation_seconds: int = 3  # столько «плохих» секунд подряд — генератор насыщен
+    cpu_threshold: float = 0.9  # доля одного ядра, занятая процессом генератора за секунду
     drain_timeout_sec: float = 10.0  # сколько ждать незавершённые проходы после конца теста
 
 
@@ -62,20 +63,40 @@ class Iteration(Protocol):
 
 
 class LagMonitor:
-    """Самоконтроль генератора: насколько event loop опаздывает с пробуждением.
+    """Самоконтроль генератора: успевает ли он сам.
 
-    Если процессор не успевает, задача, уснувшая на 100 мс, просыпается позже.
-    Медиана опоздания за секунду выше порога несколько секунд подряд означает,
-    что тормозит уже генератор, а не сайт, и цифрам теста верить нельзя.
+    Два признака «плохой» секунды:
+
+    * event loop опаздывает: задача, уснувшая на 100 мс, просыпается заметно
+      позже (медиана опоздания за секунду выше порога);
+    * процесс генератора занял почти всё ядро (``cpu_threshold``). Event loop при
+      этом может просыпаться вовремя, но новые проходы уже не успевают
+      запускаться и сбрасываются — замер показал, что одного лага для этого мало.
+
+    Несколько плохих секунд подряд — тормозит уже генератор, а не сайт, и цифрам
+    теста верить нельзя.
     """
 
-    def __init__(self, threshold_ms: float, saturation_seconds: int) -> None:
+    def __init__(
+        self,
+        threshold_ms: float,
+        saturation_seconds: int,
+        cpu_threshold: float = 0.9,
+        cpu_clock: Callable[[], float] = time.process_time,
+        wall_clock: Callable[[], float] = time.perf_counter,
+    ) -> None:
         self.threshold_ms = threshold_ms
         self.saturation_seconds = saturation_seconds
+        self.cpu_threshold = cpu_threshold
         self.lag = Histogram()
         self.saturated = False
+        self.cpu_max = 0.0
         self._current: list[float] = []
         self._bad_streak = 0
+        self._cpu_clock = cpu_clock
+        self._wall_clock = wall_clock
+        self._cpu_mark = cpu_clock()
+        self._wall_mark = wall_clock()
 
     async def run(self) -> None:
         """Фоновая задача: меряет опоздание каждые 100 мс."""
@@ -89,8 +110,18 @@ class LagMonitor:
     def close_second(self) -> bool:
         """Итог прошедшей секунды; ``True``, если секунда «плохая»."""
         samples, self._current = self._current, []
+        cpu_now, wall_now = self._cpu_clock(), self._wall_clock()
+        wall = wall_now - self._wall_mark
+        # На коротком окне доля CPU бессмысленна (шум), поэтому меряем от полсекунды.
+        cpu_share = (cpu_now - self._cpu_mark) / wall if wall >= 0.5 else 0.0
+        self._cpu_mark, self._wall_mark = cpu_now, wall_now
+        self.cpu_max = max(self.cpu_max, cpu_share)
         # Ни одного замера за секунду — event loop был заблокирован всю секунду.
-        bad = not samples or statistics.median(samples) > self.threshold_ms
+        bad = (
+            not samples
+            or statistics.median(samples) > self.threshold_ms
+            or cpu_share >= self.cpu_threshold
+        )
         self._bad_streak = self._bad_streak + 1 if bad else 0
         if self._bad_streak >= self.saturation_seconds:
             self.saturated = True
@@ -104,6 +135,8 @@ class LagMonitor:
             "lag_p95_ms": round(self.lag.percentile(95), 2),
             "lag_max_ms": round(self.lag.max, 2),
             "threshold_ms": self.threshold_ms,
+            "cpu_max": round(self.cpu_max, 2),
+            "cpu_threshold": self.cpu_threshold,
         }
 
 
@@ -147,7 +180,11 @@ class LoadRunner:
         отменить тест (heartbeat и проверка отмены у runner).
         """
         collector = MetricsCollector()
-        monitor = LagMonitor(self._limits.lag_threshold_ms, self._limits.saturation_seconds)
+        monitor = LagMonitor(
+            self._limits.lag_threshold_ms,
+            self._limits.saturation_seconds,
+            cpu_threshold=self._limits.cpu_threshold,
+        )
         monitor_task = asyncio.create_task(monitor.run())
         active: set[asyncio.Task[None]] = set()
         started = time.perf_counter()

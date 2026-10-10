@@ -71,5 +71,6 @@
   "report.saturated": "Внимание: генератор нагрузки не справлялся — цифры этого запуска недостоверны.",
   "report.generated": "Сформировано LoadWatch {at}",
   "report.no_metrics": "У запуска нет метрик.",
-  "report.seconds": "{value} с"
+  "report.seconds": "{value} с",
+  "report.apdex_t": "Apdex (T = {t} мс)"
 }

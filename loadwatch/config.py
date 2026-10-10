@@ -127,8 +127,11 @@ class Settings(BaseSettings):
     runner_log_file: str | None = None
     request_timeout_sec: float = Field(default=10.0, gt=0, le=60)
     # Самоконтроль генератора: опоздание event loop выше порога N секунд подряд.
-    generator_lag_threshold_ms: float = Field(default=50.0, gt=0)
+    # Замер: у здорового генератора медиана опоздания ≤ 0,5 мс, у насыщенного — 5–6 мс.
+    generator_lag_threshold_ms: float = Field(default=3.0, gt=0)
     generator_saturation_seconds: int = Field(default=3, ge=1)
+    # Или процесс генератора занял такую долю ядра за секунду.
+    generator_cpu_threshold: float = Field(default=0.9, gt=0, le=1)
 
     allow_private_targets: bool = False
     reverify_days: int = Field(default=7, ge=1)
@@ -150,6 +153,8 @@ class Settings(BaseSettings):
     retention_days: int = Field(default=90, ge=1)
 
     telegram_bot_token: SecretStr | None = None
+    # Чат для проверки бота командой `python -m loadwatch.notifications.check` (не обязателен).
+    telegram_test_chat_id: str | None = None
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_user: str | None = None
@@ -177,6 +182,7 @@ class Settings(BaseSettings):
         "secrets_encryption_key",
         "registration_invite_code",
         "telegram_bot_token",
+        "telegram_test_chat_id",
         "smtp_password",
         mode="before",
     )

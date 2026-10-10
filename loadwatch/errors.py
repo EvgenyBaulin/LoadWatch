@@ -229,3 +229,11 @@ class RunHasNoMetricsError(AppError):
     code = "run_has_no_metrics"
     status_code = 409
     message = "The run has no metrics to export"
+
+
+class ExportTooLargeError(AppError):
+    """За период слишком много запусков для одного CSV — нужно сузить период."""
+
+    code = "export_too_large"
+    status_code = 422
+    message = "Too many runs in the period, choose a shorter period"

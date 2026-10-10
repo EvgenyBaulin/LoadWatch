@@ -170,6 +170,7 @@ class RunService:
             max_bandwidth_mbit=settings.max_bandwidth_mbit,
             lag_threshold_ms=settings.generator_lag_threshold_ms,
             saturation_seconds=settings.generator_saturation_seconds,
+            cpu_threshold=settings.generator_cpu_threshold,
             drain_timeout_sec=settings.request_timeout_sec,
         )
         async with new_load_client(
@@ -214,6 +215,11 @@ class RunService:
         summary = outcome.collector.summary(outcome.duration_sec, apdex_t_ms=prepared.apdex_t_ms)
         summary["generator"] = outcome.generator
         summary["stop_reason"] = outcome.stop_reason
+        # Цели SLO на момент запуска: если их потом поменяют, отчёт не станет противоречивым.
+        summary["slo"] = {
+            "p95_ms": prepared.slo_p95_ms,
+            "max_error_rate": prepared.slo_max_error_rate,
+        }
         truncated = outcome.stop_reason == "bandwidth_limit"
         if outcome.profile_result is not None:
             if truncated:

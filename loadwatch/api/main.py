@@ -53,7 +53,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         description="Website performance monitoring through scheduled load tests.",
         openapi_url=f"{API_PREFIX}/openapi.json",
         docs_url=f"{API_PREFIX}/docs",
-        # ReDoc — основная документация API (по просьбе владельца), Swagger — для проб запросов.
+        # ReDoc — основная документация API, Swagger — для проб запросов.
         redoc_url=f"{API_PREFIX}/redoc",
         lifespan=lifespan,
     )
