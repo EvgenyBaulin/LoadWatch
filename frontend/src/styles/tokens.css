@@ -1,0 +1,152 @@
+/*
+ * Дизайн-токены LoadWatch. Компоненты используют только эти переменные,
+ * тема переключается атрибутом data-theme на <html> (см. index.html и stores/preferences.ts).
+ * Контраст текста и статусных цветов проверен по WCAG AA (≥ 4.5:1 на --surface).
+ */
+
+:root {
+  /* Типографика: плотная, мелкая, цифры моноширинные по ширине. */
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 18px;
+  --fs-stat: 26px;
+  --lh: 1.45;
+
+  /* Сетка и отступы. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --radius: 4px;
+  --radius-sm: 2px;
+  --nav-width: 56px;
+  --nav-width-expanded: 200px;
+  --topbar-height: 48px;
+  --control-height: 30px;
+}
+
+/* Тёмная тема — основная. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #111217;
+  --bg-elevated: #0b0c0f;
+  --surface: #181b1f;
+  --surface-2: #202328;
+  --surface-hover: #262a30;
+  --border: #2e3239;
+  --border-strong: #464c55;
+  --text: #dcdee2;
+  --text-muted: #a2a7b0;
+  --text-faint: #8a909a;
+  --text-on-accent: #1a1006;
+
+  --accent: #ff9830;
+  --accent-hover: #ffad5c;
+  --accent-text: #ff9830;
+  --accent-soft: rgba(255, 152, 48, 0.14);
+  --focus-ring: #ffb066;
+
+  --success: #73bf69;
+  --success-soft: rgba(115, 191, 105, 0.15);
+  --warning: #f5c84a;
+  --warning-soft: rgba(245, 200, 74, 0.14);
+  --error: #ff5c6e;
+  --error-soft: rgba(255, 92, 110, 0.15);
+  --info: #6ea6ff;
+  --info-soft: rgba(110, 166, 255, 0.15);
+
+  /* Пороги stat-панелей. */
+  --threshold-ok: var(--success);
+  --threshold-warn: var(--warning);
+  --threshold-bad: var(--error);
+  --threshold-neutral: var(--text);
+
+  /* Палитра серий графиков. */
+  --series-1: #6ea6ff;
+  --series-2: #ff9830;
+  --series-3: #73bf69;
+  --series-4: #c58ae6;
+  --series-5: #f5c84a;
+  --series-6: #4fd1c5;
+  --series-7: #ff7eb6;
+  --series-8: #b0b6bf;
+
+  /* Графики. */
+  --chart-grid: rgba(255, 255, 255, 0.07);
+  --chart-axis: #a2a7b0;
+  --chart-tooltip-bg: #0b0c0f;
+  --chart-tooltip-text: #dcdee2;
+  --chart-annotation-deploy: #6ea6ff;
+  --chart-annotation-comment: #a2a7b0;
+  --chart-annotation-regression: #ff5c6e;
+  --chart-slo: #f5c84a;
+
+  --skeleton-from: #1f2227;
+  --skeleton-to: #2a2e35;
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --backdrop: rgba(0, 0, 0, 0.55);
+}
+
+/* Светлая тема — равноценная: те же роли, тёмные оттенки акцента и статусов для контраста. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f3f4f6;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f6f7f9;
+  --surface-hover: #eceef2;
+  --border: #d8dbe0;
+  --border-strong: #b5bac3;
+  --text: #1c2027;
+  --text-muted: #535a66;
+  --text-faint: #646b77;
+  --text-on-accent: #ffffff;
+
+  --accent: #c24e00;
+  --accent-hover: #a34100;
+  --accent-text: #b04700;
+  --accent-soft: rgba(194, 78, 0, 0.1);
+  --focus-ring: #c24e00;
+
+  --success: #1b7a38;
+  --success-soft: rgba(27, 122, 56, 0.1);
+  --warning: #8a5d00;
+  --warning-soft: rgba(184, 128, 0, 0.13);
+  --error: #c01b30;
+  --error-soft: rgba(192, 27, 48, 0.09);
+  --info: #1d5fc2;
+  --info-soft: rgba(29, 95, 194, 0.1);
+
+  --threshold-ok: var(--success);
+  --threshold-warn: var(--warning);
+  --threshold-bad: var(--error);
+  --threshold-neutral: var(--text);
+
+  --series-1: #1d5fc2;
+  --series-2: #c24e00;
+  --series-3: #2a8a3e;
+  --series-4: #8a3bb8;
+  --series-5: #a07000;
+  --series-6: #0f8278;
+  --series-7: #c2306f;
+  --series-8: #5c636e;
+
+  --chart-grid: rgba(0, 0, 0, 0.08);
+  --chart-axis: #535a66;
+  --chart-tooltip-bg: #1c2027;
+  --chart-tooltip-text: #f3f4f6;
+  --chart-annotation-deploy: #1d5fc2;
+  --chart-annotation-comment: #646b77;
+  --chart-annotation-regression: #c01b30;
+  --chart-slo: #a07000;
+
+  --skeleton-from: #eceef1;
+  --skeleton-to: #dfe2e7;
+  --shadow: 0 4px 16px rgba(20, 24, 31, 0.14);
+  --backdrop: rgba(20, 24, 31, 0.35);
+}
