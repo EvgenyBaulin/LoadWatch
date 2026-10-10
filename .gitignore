@@ -23,9 +23,9 @@ frontend/dist/
 *.local
 
 # Файлы времени выполнения
-logs/
+/logs/
 *.log
-reports/
+/reports/
 
 # ОС и редакторы
 .DS_Store
