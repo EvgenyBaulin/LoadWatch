@@ -18,7 +18,7 @@
 ARG PYTHON_IMAGE=python:3.12-slim
 
 # --- uv: менеджер зависимостей, версия закреплена ------------------------------------
-FROM ghcr.io/astral-sh/uv:0.11.26 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.0 AS uv
 
 # --- supercronic: cron для контейнера (пишет в stdout, корректно ловит SIGTERM) -------
 # Бинарник проверяется по SHA-256 из релиза; архитектура выбирается автоматически.
