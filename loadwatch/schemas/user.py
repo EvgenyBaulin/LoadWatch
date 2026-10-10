@@ -55,6 +55,9 @@ class UserOut(BaseModel):
     email: str
     locale: Locale
     timezone: str
+    digest_enabled: bool
+    digest_weekday: int = Field(description="0 — понедельник … 6 — воскресенье")
+    digest_hour: int = Field(description="Час по часовому поясу пользователя")
     created_at: datetime
 
 
@@ -72,6 +75,9 @@ class PreferencesUpdate(BaseModel):
 
     locale: Locale | None = None
     timezone: str | None = Field(default=None, max_length=64)
+    digest_enabled: bool | None = None
+    digest_weekday: int | None = Field(default=None, ge=0, le=6)
+    digest_hour: int | None = Field(default=None, ge=0, le=23)
 
     @field_validator("timezone")
     @classmethod

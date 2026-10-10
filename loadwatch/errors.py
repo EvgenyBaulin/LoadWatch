@@ -197,3 +197,27 @@ class InvalidPeriodError(AppError):
     code = "invalid_period"
     status_code = 422
     message = "Invalid period: 'from' must be before 'to' and the period at most 400 days"
+
+
+class InvalidChannelError(AppError):
+    """Неверные параметры канала уведомлений; подробности — в ``details.config``."""
+
+    code = "invalid_channel"
+    status_code = 422
+    message = "Invalid notification channel settings"
+
+
+class InvalidTriggerTokenError(AppError):
+    """Токен триггера неверный или не выпущен."""
+
+    code = "invalid_trigger_token"
+    status_code = 401
+    message = "Invalid trigger token"
+
+
+class ScenarioRequiredError(AppError):
+    """У сайта несколько сценариев и нет расписания — нужно указать ``scenario_id``."""
+
+    code = "scenario_required"
+    status_code = 422
+    message = "Specify scenario_id: the site has several scenarios and no schedule"

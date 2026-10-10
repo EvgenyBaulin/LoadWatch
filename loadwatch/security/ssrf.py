@@ -251,6 +251,11 @@ class SafeHttpClient:
         self._max_body_bytes = max_body_bytes
         self._transport = transport
 
+    def check(self, url: str) -> PinnedTarget:
+        """Проверка адреса без запроса: разбор и резолв (все адреса — разрешённые)."""
+        target = parse_target_url(url, allow_private=self._allow_private)
+        return resolve_target(target, resolver=self._resolver, allow_private=self._allow_private)
+
     def get(self, url: str) -> FetchResult:
         """Синхронная версия :meth:`aget`; нельзя вызывать из работающего event loop."""
         return asyncio.run(self.aget(url))

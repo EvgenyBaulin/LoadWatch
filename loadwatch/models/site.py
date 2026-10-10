@@ -70,6 +70,8 @@ class Site(TimestampMixin, Base):
     last_verified_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     # Время последней попытки перепроверки (успешной или нет), чтобы не долбить сайт.
     verification_checked_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    # SHA-256 токена триггера из CI; сам токен показывается один раз при выпуске.
+    trigger_token_hash: Mapped[str | None] = mapped_column(String(64))
 
     @property
     def is_verified(self) -> bool:

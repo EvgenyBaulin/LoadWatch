@@ -7,7 +7,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response, status
 
-from loadwatch.api.deps import CurrentUser, SiteServiceDep
+from loadwatch.api.deps import AlertManagerDep, CurrentUser, SiteServiceDep
+from loadwatch.errors import VerificationFailedError
 from loadwatch.schemas.common import Page, PageParams
 from loadwatch.schemas.site import SiteCreate, SiteOut, VerificationInfoOut, VerifyRequest
 
@@ -56,8 +57,17 @@ def verify_site(
     request: Request,
     user: CurrentUser,
     service: SiteServiceDep,
+    alerts: AlertManagerDep,
 ) -> SiteOut:
     """Проверить владение; при неудаче — 422 ``verification_failed`` с причиной."""
     # Каждая проверка — исходящий DNS/HTTP-запрос, поэтому частота ограничена.
     request.app.state.verify_rate_limiter.hit(f"verify:{user.id}")
-    return SiteOut.model_validate(service.verify(user, site_id, data.method))
+    try:
+        site = service.verify(user, site_id, data.method)
+    except VerificationFailedError:
+        # Проверка могла снять подтверждение (адрес ушёл во внутреннюю сеть) — это алерт.
+        if service.get(user, site_id).verification_status == "unverified":
+            alerts.site_lost(site_id)
+        raise
+    alerts.site_reverified(site.id)  # если был алерт «владение потеряно» — закрываем
+    return SiteOut.model_validate(site)

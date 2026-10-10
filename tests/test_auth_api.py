@@ -182,6 +182,8 @@ def test_health_reports_unavailable_database(make_client: Callable[..., TestClie
 def test_openapi_available(client: TestClient) -> None:
     schema = client.get("/api/v1/openapi.json").json()
     assert "/api/v1/auth/register" in schema["paths"]
+    redoc = client.get("/api/v1/redoc")
+    assert redoc.status_code == 200 and "redoc" in redoc.text.lower()
 
 
 def test_unhandled_error_hides_details(

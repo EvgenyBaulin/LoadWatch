@@ -9,11 +9,14 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session, sessionmaker
 
+from loadwatch.alerts import AlertManager
 from loadwatch.config import Settings
 from loadwatch.errors import NotAuthenticatedError
 from loadwatch.models import User
 from loadwatch.services.auth_service import AuthService
+from loadwatch.services.channel_service import ChannelService
 from loadwatch.services.dashboard_service import DashboardService
+from loadwatch.services.hook_service import HookService
 from loadwatch.services.run_queue_service import RunQueueService
 from loadwatch.services.scenario_service import ScenarioService
 from loadwatch.services.schedule_service import ScheduleService
@@ -100,3 +103,31 @@ def get_dashboard_service(session: SessionDep, settings: SettingsDep) -> Dashboa
 
 
 DashboardServiceDep = Annotated[DashboardService, Depends(get_dashboard_service)]
+
+
+def get_channel_service(
+    request: Request, session: SessionDep, settings: SettingsDep
+) -> ChannelService:
+    """Сервис каналов с нотификаторами приложения (в тестах подменяются)."""
+    return ChannelService(session, settings, request.app.state.notifiers)
+
+
+ChannelServiceDep = Annotated[ChannelService, Depends(get_channel_service)]
+
+
+def get_hook_service(session: SessionDep, settings: SettingsDep) -> HookService:
+    """Сервис триггера, меток и алертов."""
+    return HookService(session, settings)
+
+
+HookServiceDep = Annotated[HookService, Depends(get_hook_service)]
+
+
+def get_alert_manager(
+    session: SessionDep, settings: SettingsDep, channels: ChannelServiceDep
+) -> AlertManager:
+    """Менеджер алертов (для восстановления после повторной верификации)."""
+    return AlertManager(session, settings, channels)
+
+
+AlertManagerDep = Annotated[AlertManager, Depends(get_alert_manager)]

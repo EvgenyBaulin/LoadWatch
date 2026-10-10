@@ -74,6 +74,10 @@ class AuthService:
             user.locale = data.locale
         if data.timezone is not None:
             user.timezone = data.timezone
+        for name in ("digest_enabled", "digest_weekday", "digest_hour"):
+            value = getattr(data, name)
+            if value is not None:
+                setattr(user, name, value)
         self._session.commit()
         return user
 

@@ -15,17 +15,21 @@ from __future__ import annotations
 import argparse
 import logging
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import timedelta
 from logging.handlers import RotatingFileHandler
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from loadwatch.alerts import AlertManager
 from loadwatch.config import Settings, get_settings
 from loadwatch.db import create_db_engine, create_session_factory, utcnow
 from loadwatch.logging_setup import LOG_FORMAT, configure_logging, warn_about_unsafe_settings
+from loadwatch.notifications import NotifierRegistry
 from loadwatch.repositories.run_repository import RunRepository
 from loadwatch.security import ssrf
+from loadwatch.services.channel_service import ChannelService
 from loadwatch.services.run_service import RunService
 from loadwatch.services.schedule_service import ScheduleService
 from loadwatch.services.site_service import SiteService
@@ -43,9 +47,26 @@ class TickReport:
     lost_ownership: int = 0
     scheduled: int = 0
     executed: list[str] = field(default_factory=list)
+    notifications: list[str] = field(default_factory=list)
 
 
-def recover_stale(factory: sessionmaker[Session], settings: Settings) -> int:
+def _process_alerts(
+    factory: sessionmaker[Session],
+    settings: Settings,
+    notifiers: NotifierRegistry,
+    run_id: uuid.UUID,
+    report: TickReport,
+) -> None:
+    """Алерты по итогам запуска; сбой уведомлений не должен ронять runner."""
+    try:
+        with factory() as session:
+            channels = ChannelService(session, settings, notifiers)
+            report.notifications += AlertManager(session, settings, channels).process_run(run_id)
+    except Exception:
+        logger.exception("Alert processing for run %s failed", run_id)
+
+
+def recover_stale(factory: sessionmaker[Session], settings: Settings) -> list[uuid.UUID]:
     """Запуски без heartbeat дольше ``RUNNER_STALE_AFTER_SEC`` → ``failed``."""
     with factory() as session:
         now = utcnow()
@@ -57,7 +78,7 @@ def recover_stale(factory: sessionmaker[Session], settings: Settings) -> int:
             run.finished_at = now
             logger.warning("Run %s marked failed: no heartbeat since %s", run.id, run.heartbeat_at)
         session.commit()
-        return len(stale)
+        return [run.id for run in stale]
 
 
 def tick(
@@ -67,16 +88,25 @@ def tick(
     resolver: ssrf.Resolver = ssrf.system_resolver,
     verifiers: VerifierRegistry | None = None,
     max_runs: int | None = None,
+    notifiers: NotifierRegistry | None = None,
 ) -> TickReport:
     """Один проход runner (см. описание модуля)."""
     report = TickReport()
-    report.stale_failed = recover_stale(factory, settings)
+    notifiers = notifiers or NotifierRegistry(settings)
+    stale_ids = recover_stale(factory, settings)
+    report.stale_failed = len(stale_ids)
+    for run_id in stale_ids:
+        _process_alerts(factory, settings, notifiers, run_id, report)
 
     with factory() as session:
         registry = verifiers or default_registry(settings)
         results = SiteService(session, settings, registry, resolver).reverify_due()
         report.reverified = len(results)
         report.lost_ownership = sum(result.lost_ownership for result in results)
+        alerts = AlertManager(session, settings, ChannelService(session, settings, notifiers))
+        for result in results:
+            if result.lost_ownership:
+                report.notifications += alerts.site_lost(result.site_id)
 
     with factory() as session:
         report.scheduled = len(ScheduleService(session, settings).enqueue_due())
@@ -94,6 +124,7 @@ def tick(
         with factory() as session:
             RunService(session, settings, resolver).execute(run_id)
         report.executed.append(str(run_id))
+        _process_alerts(factory, settings, notifiers, run_id, report)
     return report
 
 
@@ -121,11 +152,12 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         engine.dispose()
     logger.info(
-        "Runner tick: stale=%d reverified=%d lost=%d scheduled=%d executed=%d",
+        "Runner tick: stale=%d reverified=%d lost=%d scheduled=%d executed=%d notified=%d",
         report.stale_failed,
         report.reverified,
         report.lost_ownership,
         report.scheduled,
         len(report.executed),
+        len(report.notifications),
     )
     return 0

@@ -135,6 +135,40 @@ def clean_database(migrated_database: str) -> Iterator[str]:
     engine.dispose()
 
 
+class RecordingNotifiers:
+    """Нотификаторы без сети: проверка параметров настоящая, отправка — в список."""
+
+    def __init__(self, settings: Settings, dns: FakeDns) -> None:
+        import httpx
+
+        from loadwatch.notifications import NotifierRegistry
+        from loadwatch.security.ssrf import SafeHttpClient
+
+        transport = httpx.MockTransport(lambda request: httpx.Response(200))
+        http = SafeHttpClient(
+            resolver=dns, allow_private=settings.allow_private_targets, transport=transport
+        )
+        self.real = NotifierRegistry(settings, http=http)
+        self.sent: list[tuple[str, Any, Any]] = []
+        self.fail_with: str | None = None
+
+    def get(self, channel_type: str) -> Any:
+        registry = self
+
+        class Recorder:
+            def validate(self, raw: dict[str, Any]) -> Any:
+                return registry.real.get(channel_type).validate(raw)
+
+            def send(self, message: Any, config: Any) -> None:
+                from loadwatch.notifications.notifiers import DeliveryError
+
+                if registry.fail_with:
+                    raise DeliveryError(registry.fail_with)
+                registry.sent.append((channel_type, message, config))
+
+        return Recorder()
+
+
 @pytest.fixture
 def fake_verifiers() -> dict[str, FakeVerifier]:
     """Верификаторы ``dns`` и ``http`` без сети."""
@@ -148,11 +182,18 @@ def fake_dns() -> FakeDns:
 
 
 @pytest.fixture
+def notifications() -> list[RecordingNotifiers]:
+    """Сюда попадают нотификаторы созданных клиентов (последний — текущий)."""
+    return []
+
+
+@pytest.fixture
 def make_client(
     clean_database: str,
     make_settings: Callable[..., Settings],
     fake_verifiers: dict[str, FakeVerifier],
     fake_dns: FakeDns,
+    notifications: list[RecordingNotifiers],
 ) -> Iterator[Callable[..., TestClient]]:
     """Фабрика API-клиентов; аргументы переопределяют настройки. Сеть и DNS подменены."""
     apps: list[FastAPI] = []
@@ -161,6 +202,8 @@ def make_client(
         app = create_app(make_settings(**overrides))
         app.state.verifiers = VerifierRegistry(list(fake_verifiers.values()))
         app.state.resolver = fake_dns
+        app.state.notifiers = RecordingNotifiers(app.state.settings, fake_dns)
+        notifications.append(app.state.notifiers)
         apps.append(app)
         return TestClient(app)
 

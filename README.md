@@ -9,5 +9,5 @@ uv sync
 docker compose -f docker-compose.dev.yml up -d
 uv run alembic upgrade head
 uv run uvicorn --factory loadwatch.api.main:create_app --reload
-# Swagger: http://127.0.0.1:8000/api/v1/docs
+# Документация API (ReDoc): http://127.0.0.1:8000/api/v1/redoc
 ```

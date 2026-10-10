@@ -107,6 +107,8 @@ class Settings(BaseSettings):
     auth_rate_limit_per_minute: int = Field(default=10, ge=1)
     verify_rate_limit_per_minute: int = Field(default=6, ge=1)
     dry_run_rate_limit_per_minute: int = Field(default=5, ge=1)
+    hook_rate_limit_per_minute: int = Field(default=10, ge=1)
+    channel_test_rate_limit_per_minute: int = Field(default=5, ge=1)
 
     resource_profile: ResourceProfile = ResourceProfile.SMALL
     max_rps: int = Field(ge=1)
