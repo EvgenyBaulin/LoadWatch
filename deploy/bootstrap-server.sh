@@ -357,7 +357,7 @@ SUDOERS=/etc/sudoers.d/loadwatch-deploy
 cat > "$SUDOERS.tmp" <<EOF
 # Ровно те команды, что выполняет deploy/deploy.sh. Создано bootstrap-server.sh.
 $DEPLOY_USER ALL=($SERVICE_USER) NOPASSWD: /usr/bin/env LOADWATCH_ENV_FILE=$ENV_FILE $APP_DIR/.venv/bin/alembic -c $APP_DIR/alembic.ini upgrade head
-$DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart loadwatch-api.service, /usr/bin/systemctl try-restart demo-target.service, /usr/bin/systemctl reload nginx.service, /usr/sbin/nginx -t -q
+$DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart loadwatch-api.service, /usr/bin/systemctl restart demo-target.service, /usr/bin/systemctl reload nginx.service, /usr/sbin/nginx -t -q
 EOF
 visudo -cqf "$SUDOERS.tmp" || die "ошибка в sudoers"
 install -m 440 "$SUDOERS.tmp" "$SUDOERS"

@@ -76,8 +76,11 @@ fi
 # --- 4. Перезапуск и проверка -----------------------------------------------------
 log "перезапуск loadwatch-api"
 sudo -n /usr/bin/systemctl restart loadwatch-api.service
-# Демо-цель перезапускается, только если она включена (try-restart не стартует её).
-sudo -n /usr/bin/systemctl try-restart demo-target.service || true
+# Демо-цель — только если она включена (bootstrap-server.sh с DEMO_DOMAIN). restart
+# запускает и ещё не стартовавшую: при первом деплое кода до этого не было.
+if systemctl is-enabled --quiet demo-target.service 2>/dev/null; then
+    sudo -n /usr/bin/systemctl restart demo-target.service
+fi
 
 log "проверка $HEALTH_URL"
 for _ in $(seq 1 30); do
