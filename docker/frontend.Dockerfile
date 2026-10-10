@@ -25,7 +25,7 @@ COPY --from=build /src/frontend/dist/index.html /index.html
 RUN python /gen.py /index.html > /security-headers.conf
 
 # --- 3. Nginx со статикой -----------------------------------------------------------
-FROM nginx:1.28-alpine AS runtime
+FROM nginx:1.31-alpine AS runtime
 
 LABEL org.opencontainers.image.title="loadwatch-frontend" \
       org.opencontainers.image.description="LoadWatch SPA served by Nginx" \
