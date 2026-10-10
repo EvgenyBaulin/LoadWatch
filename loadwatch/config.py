@@ -117,6 +117,10 @@ class Settings(BaseSettings):
     db_pool_size: int = Field(ge=1)
     max_response_bytes: int = Field(default=256 * 1024, ge=1024)
     site_cooldown_sec: int = Field(default=300, ge=0)
+    request_timeout_sec: float = Field(default=10.0, gt=0, le=60)
+    # Самоконтроль генератора: опоздание event loop выше порога N секунд подряд.
+    generator_lag_threshold_ms: float = Field(default=50.0, gt=0)
+    generator_saturation_seconds: int = Field(default=3, ge=1)
 
     allow_private_targets: bool = False
     reverify_days: int = Field(default=7, ge=1)
