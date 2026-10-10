@@ -1,8 +1,9 @@
-# CD: выкладка на VPS (основной путь: systemd + cron + Nginx) и, по тегу,
-# публикация Docker-образов в GHCR.
+# CD: выкладка на VPS (основной путь: systemd + timers + Nginx) и публикация
+# Docker-образов в GHCR.
 #
-# Запуск: тег v* (git tag v1.0.0 && git push origin v1.0.0) или вручную
-# (Actions → Deploy → Run workflow).
+# Запуск: публикация релиза на GitHub (Releases → Draft a new release → тег v*,
+# или gh release create v0.2.0 --generate-notes) — сервер обновляется сам.
+# Вручную: Actions → Deploy → Run workflow (выкладывает выбранную ветку или тег).
 #
 # Секреты (Settings → Environments → production → Secrets):
 #   DEPLOY_HOST         адрес сервера (IP или домен)
@@ -14,8 +15,8 @@
 name: Deploy
 
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -34,6 +35,8 @@ jobs:
     environment:
       name: production
       url: https://loadwatch.tarakan-tuc.ru
+    # Черновики и пре-релизы на сервер не выкладываются.
+    if: github.event_name != 'release' || !github.event.release.prerelease
     # Один деплой за раз; начатый не отменяется (миграции не должны рваться на середине).
     concurrency:
       group: deploy-production
@@ -102,7 +105,7 @@ jobs:
   # Необязательная публикация образов в GHCR (альтернативный Docker-путь).
   publish-images:
     name: Publish images to GHCR
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'release'
     needs: ci
     runs-on: ubuntu-latest
     timeout-minutes: 30

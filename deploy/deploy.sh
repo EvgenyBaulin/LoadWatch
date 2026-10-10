@@ -12,7 +12,7 @@
 #   3. заголовки безопасности Nginx (CSP с хэшем inline-скрипта) из index.html;
 #   4. перезапуск loadwatch-api и проверка /api/v1/health с повторами.
 # Runner/digest/maintenance перезапускать не нужно: cron или таймер сам запустит
-# новый код в следующую минуту.
+# новый код в следующую минуту. Демо-цель перезапускается, если она включена.
 #
 # Секреты не печатаются: скрипт не читает /etc/loadwatch/env, его читает только
 # приложение (под loadwatch). Права sudo для пользователя deploy ограничены
@@ -43,9 +43,12 @@ cd "$APP_DIR"
 
 # --- 1. Зависимости -------------------------------------------------------------
 log "uv sync (по uv.lock, без dev-зависимостей)"
-export UV_PYTHON_DOWNLOADS=never   # только системный Python 3.12, ничего не качаем
+# Python 3.12 от uv в /opt/uv-python (каталог создаёт bootstrap-server.sh): в новых
+# Ubuntu системный Python другой версии. Повторная установка — no-op.
+export UV_PYTHON_INSTALL_DIR=/opt/uv-python
 export UV_COMPILE_BYTECODE=1       # байткод заранее: сервисы работают с read-only кодом
-uv sync --frozen --no-dev
+uv python install --quiet 3.12
+uv sync --frozen --no-dev --python 3.12
 # Байткод самого проекта (uv компилирует только зависимости).
 .venv/bin/python -m compileall -q loadwatch migrations demo_target >/dev/null
 

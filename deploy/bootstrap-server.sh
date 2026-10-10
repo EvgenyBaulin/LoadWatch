@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Первичная подготовка чистого Ubuntu 24.04 под LoadWatch (основной путь без Docker).
+# Первичная подготовка чистого Ubuntu (24.04 или новее) под LoadWatch (основной путь без Docker).
 #
 # Запуск от root из копии репозитория (нужен каталог deploy/ рядом со скриптом):
 #   scp -r deploy root@72.56.86.172:/root/loadwatch-deploy
@@ -14,18 +14,20 @@
 #
 # Что делает:
 #   1. часовой пояс UTC, swap-файл 1 ГБ, пакеты (PostgreSQL, Nginx, certbot…);
-#   2. uv в /usr/local/bin (Node на сервер не ставится — фронтенд собирается в CI);
+#   2. uv в /usr/local/bin и Python 3.12 от uv в /opt/uv-python (в новых Ubuntu
+#      системный Python другой версии; Node не ставится — фронтенд собирается в CI);
 #   3. пользователи: loadwatch (сервисы, без входа) и deploy (вход по SSH-ключу для CI);
 #   4. каталоги /opt/loadwatch, /var/log/loadwatch, /etc/loadwatch;
 #   5. роль и база PostgreSQL со сгенерированным паролем + настройки под 1 ГБ;
 #   6. /etc/loadwatch/env с секретами, сгенерированными здесь же (в репозитории их нет);
 #   7. unit-файлы systemd, расписание (cron или таймеры), logrotate, journald;
-#   8. Nginx + сертификат Let's Encrypt (webroot) для домена;
+#   8. Nginx + сертификаты Let's Encrypt (webroot) для домена и демо-поддомена;
 #   9. sudoers для deploy: только нужные деплою команды.
 # Первый выпуск кода — workflow deploy.yml (или rsync + deploy/deploy.sh руками).
 #
 # Параметры (переменные окружения):
 #   DOMAIN             домен (по умолчанию loadwatch.tarakan-tuc.ru)
+#   DEMO_DOMAIN        поддомен демо-сайта (по умолчанию demo.<DOMAIN>; пусто — без демо)
 #   LETSENCRYPT_EMAIL  почта для уведомлений Let's Encrypt (пусто — без почты)
 #   DEPLOY_PUBKEY      публичный SSH-ключ для пользователя deploy (GitHub Actions)
 #   SCHEDULER          cron (по умолчанию) или timers — чем запускать runner/digest/maintenance
@@ -34,11 +36,14 @@
 set -euo pipefail
 
 DOMAIN=${DOMAIN:-loadwatch.tarakan-tuc.ru}
+DEMO_DOMAIN=${DEMO_DOMAIN-demo.$DOMAIN}
 LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}
 DEPLOY_PUBKEY=${DEPLOY_PUBKEY:-}
 SCHEDULER=${SCHEDULER:-cron}
 SKIP_CERTBOT=${SKIP_CERTBOT:-0}
 UV_VERSION=0.11.26
+PYTHON_VERSION=3.12
+UV_PYTHON_DIR=/opt/uv-python
 
 APP_DIR=/opt/loadwatch
 LOG_DIR=/var/log/loadwatch
@@ -60,7 +65,7 @@ die() { printf 'ОШИБКА: %s\n' "$*" >&2; exit 1; }
 [[ $SCHEDULER == cron || $SCHEDULER == timers ]] || die "SCHEDULER: cron или timers"
 # shellcheck source=/dev/null
 . /etc/os-release
-[[ ${ID:-} == ubuntu ]] || die "скрипт рассчитан на Ubuntu 24.04 (найдено: ${PRETTY_NAME:-?})"
+[[ ${ID:-} == ubuntu ]] || die "скрипт рассчитан на Ubuntu 24.04+ (найдено: ${PRETTY_NAME:-?})"
 
 # --- 1. Система ---------------------------------------------------------------------
 log "Часовой пояс UTC (время в БД и в cron — UTC)"
@@ -124,6 +129,13 @@ install -d -m 755 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$APP_DIR"
 install -d -m 750 -o "$SERVICE_USER" -g "$SERVICE_USER" "$LOG_DIR"
 install -d -m 750 -o root -g "$SERVICE_USER" "$CONF_DIR"
 install -d -m 755 "$WEBROOT"
+
+log "Python $PYTHON_VERSION от uv в $UV_PYTHON_DIR"
+# Каталог принадлежит deploy (deploy.sh ставит туда же), читают все: на него
+# ссылается .venv, из которого работают сервисы под $SERVICE_USER.
+install -d -m 755 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$UV_PYTHON_DIR"
+runuser -u "$DEPLOY_USER" -- env UV_PYTHON_INSTALL_DIR="$UV_PYTHON_DIR" \
+    /usr/local/bin/uv python install --quiet "$PYTHON_VERSION"
 
 # --- 3. PostgreSQL ------------------------------------------------------------------
 log "PostgreSQL: настройки под 1 ГБ"
@@ -228,7 +240,7 @@ for unit in loadwatch-api.service \
 done
 systemctl daemon-reload
 systemctl enable --quiet loadwatch-api.service
-# Демо-цель не включается: она требует ALLOW_PRIVATE_TARGETS=true (см. demo-target.service).
+# Демо-цель включается ниже, вместе с её поддоменом в Nginx (DEMO_DOMAIN).
 if [[ -x $APP_DIR/.venv/bin/uvicorn ]]; then
     systemctl restart loadwatch-api.service
 else
@@ -268,28 +280,52 @@ fi
 chown "$DEPLOY_USER:$DEPLOY_USER" "$HEADERS_SNIPPET"
 chmod 644 "$HEADERS_SNIPPET"
 
-CERT=/etc/letsencrypt/live/$DOMAIN/fullchain.pem
-SITE=/etc/nginx/sites-available/loadwatch.conf
-if [[ ! -f $CERT && $SKIP_CERTBOT != 1 ]]; then
-    # Сертификата ещё нет, а полный конфиг ссылается на него — сначала временный
-    # HTTP-only сервер только для проверки ACME.
-    cat > "$SITE" <<EOF
+# Сертификат для домена: если его ещё нет, сначала временный HTTP-only сервер только
+# для проверки ACME (полный конфиг ссылается на сертификат и без него не загрузится).
+issue_cert() {
+    local domain=$1 site=$2
+    [[ -f /etc/letsencrypt/live/$domain/fullchain.pem || $SKIP_CERTBOT == 1 ]] && return 0
+    cat > "$site" <<EOF
 server {
     listen 80;
     listen [::]:80;
-    server_name $DOMAIN;
+    server_name $domain;
     location ^~ /.well-known/acme-challenge/ { root $WEBROOT; }
     location / { return 503; }
 }
 EOF
-    ln -sf "$SITE" /etc/nginx/sites-enabled/loadwatch.conf
+    ln -sf "$site" "/etc/nginx/sites-enabled/$(basename "$site")"
     nginx -t -q && systemctl reload nginx
-    log "Let's Encrypt для $DOMAIN (домен должен уже указывать на этот сервер)"
-    email_args=(--register-unsafely-without-email)
+    log "Let's Encrypt для $domain (домен должен уже указывать на этот сервер)"
+    local email_args=(--register-unsafely-without-email)
     [[ -n $LETSENCRYPT_EMAIL ]] && email_args=(--email "$LETSENCRYPT_EMAIL")
-    certbot certonly --webroot -w "$WEBROOT" -d "$DOMAIN" \
+    certbot certonly --webroot -w "$WEBROOT" -d "$domain" \
         --agree-tos --non-interactive "${email_args[@]}"
+}
+
+# Полный конфиг сайта из шаблона deploy/ с подстановкой домена. Для nginx старше
+# 1.25.1 (Ubuntu 24.04) директива http2 переписывается в старую форму listen.
+install_site() {
+    local template=$1 placeholder=$2 domain=$3 site=$4 nginx_version
+    if [[ ! -f /etc/letsencrypt/live/$domain/fullchain.pem ]]; then
+        echo "Сертификата для $domain нет (SKIP_CERTBOT=1?) — полный конфиг не установлен."
+        return 0
+    fi
+    sed "s/${placeholder//./\\.}/$domain/g" "$template" > "$site"
+    nginx_version=$(nginx -v 2>&1 | sed -n 's#.*nginx/\([0-9.]*\).*#\1#p')
+    if [[ $(printf '%s\n' 1.25.1 "$nginx_version" | sort -V | head -n 1) != 1.25.1 ]]; then
+        sed -i -e '/^[[:space:]]*http2 on;/d' -e 's/listen \(.*\) ssl;/listen \1 ssl http2;/' "$site"
+    fi
+    ln -sf "$site" "/etc/nginx/sites-enabled/$(basename "$site")"
+}
+
+SITE=/etc/nginx/sites-available/loadwatch.conf
+DEMO_SITE=/etc/nginx/sites-available/loadwatch-demo.conf
+issue_cert "$DOMAIN" "$SITE"
+if [[ -n $DEMO_DOMAIN ]]; then
+    issue_cert "$DEMO_DOMAIN" "$DEMO_SITE"
 fi
+
 # После продления (certbot.timer) Nginx перечитывает сертификат.
 install -d /etc/letsencrypt/renewal-hooks/deploy
 cat > /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh <<'EOF'
@@ -298,15 +334,19 @@ systemctl reload nginx
 EOF
 chmod 755 /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 
-if [[ -f $CERT ]]; then
-    sed "s/loadwatch\.tarakan-tuc\.ru/$DOMAIN/g" "$SRC/nginx.conf" > "$SITE"
-    ln -sf "$SITE" /etc/nginx/sites-enabled/loadwatch.conf
-    nginx -t -q
-    systemctl reload nginx
-    systemctl enable --quiet nginx
-else
-    echo "Сертификата нет (SKIP_CERTBOT=1?) — полный конфиг Nginx не установлен."
+install_site "$SRC/nginx.conf" loadwatch.tarakan-tuc.ru "$DOMAIN" "$SITE"
+if [[ -n $DEMO_DOMAIN ]]; then
+    install_site "$SRC/nginx-demo.conf" demo.loadwatch.tarakan-tuc.ru "$DEMO_DOMAIN" "$DEMO_SITE"
+    # Демо-цель доступна снаружи только через Nginx (HTTPS, публичный адрес), поэтому
+    # LoadWatch тестирует её с ALLOW_PRIVATE_TARGETS=false и её можно держать включённой.
+    systemctl enable --quiet demo-target.service
+    if [[ -x $APP_DIR/.venv/bin/python ]]; then
+        systemctl restart demo-target.service
+    fi
 fi
+nginx -t -q
+systemctl reload nginx
+systemctl enable --quiet nginx
 
 # --- 7. sudo для деплоя ------------------------------------------------------------------
 log "sudoers для $DEPLOY_USER"
@@ -325,7 +365,8 @@ cat <<EOF
 Дальше:
   1. GitHub → Settings → Secrets (environment production): DEPLOY_HOST, DEPLOY_USER=$DEPLOY_USER,
      DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS (ssh-keyscan -H $DOMAIN), при нестандартном порте DEPLOY_PORT.
-  2. Запустить workflow Deploy (тег v* или вручную) — он выложит код и запустит API.
+  2. Опубликовать релиз на GitHub (или Actions → Deploy → Run workflow): код выложится
+     и API запустится. Дальше сервер обновляется сам при каждом новом релизе.
   3. Проверка: curl -fsS https://$DOMAIN/api/v1/health
   4. Почта/Telegram: отредактировать $ENV_FILE, затем systemctl restart loadwatch-api.
   Фаервол (если нужен): ufw allow OpenSSH && ufw allow 'Nginx Full' && ufw enable
