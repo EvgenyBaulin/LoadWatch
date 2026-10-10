@@ -1,0 +1,153 @@
+# Полный локальный стек LoadWatch в Docker: Postgres, миграции, API, runner
+# (supercronic), демо-цель и фронтенд на http://localhost:8080.
+#
+#   docker compose up -d --build        # собрать и запустить
+#   docker compose logs -f api runner   # логи
+#   docker compose down                 # остановить (данные в томе остаются)
+#   docker compose down -v              # остановить и удалить базу
+#
+# Это стек для разработки и демонстрации, НЕ для продакшена: секреты ниже —
+# заведомо небезопасные заглушки, а защита от SSRF ослаблена ради demo-target.
+# Продакшен: systemd-путь (deploy/) или docker-compose.prod.yml.
+#
+# Настройки (полный список — loadwatch/config.py, класс Settings):
+#   * необязательный файл .env в корне проекта подмешивается в контейнеры
+#     (SMTP, Telegram, лимиты и т. п.); без него стек тоже стартует;
+#   * значения из блока environment ниже важнее .env — это то, что обязано
+#     совпадать с устройством стека (адрес базы, адрес фронтенда);
+#   * JWT_SECRET и SECRETS_ENCRYPTION_KEY берутся из окружения shell или из .env
+#     (подстановка Compose), а если их нет — из dev-заглушек ниже.
+#
+# Имя проекта задано явно: docker-compose.dev.yml (только Postgres для локальной
+# разработки) живёт в том же каталоге, и без своего имени стеки делили бы контейнеры.
+name: loadwatch-stack
+
+x-backend-env: &backend-env
+  ENVIRONMENT: development
+  # Контейнеры получают настройки только из окружения, файл внутри образа не читается.
+  LOADWATCH_ENV_FILE: ""
+  DATABASE_URL: postgresql+psycopg://loadwatch:loadwatch@postgres:5432/loadwatch
+  # DEV-ONLY: заглушки для локального стека. В проде — сгенерированные значения
+  # (bootstrap-server.sh делает это сам). Длина JWT_SECRET >= 32 символа.
+  JWT_SECRET: ${JWT_SECRET:-DEV-ONLY-insecure-jwt-secret-change-me-0000}
+  # DEV-ONLY: валидный ключ Fernet (base64 от 32 байт), но всем известный.
+  SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-REVWLU9OTFktaW5zZWN1cmUtY29tcG9zZS1rZXktMDA=}
+  PUBLIC_BASE_URL: http://localhost:${FRONTEND_PORT:-8080}
+  CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-8080}
+  # Демо: runner должен ходить на demo-target во внутренней docker-сети, а это
+  # приватный адрес. В проде всегда false (это защита от SSRF).
+  ALLOW_PRIVATE_TARGETS: "true"
+  RESOURCE_PROFILE: ${RESOURCE_PROFILE:-small}
+
+x-backend: &backend
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: loadwatch-api:local
+  env_file:
+    - path: .env
+      required: false
+  environment: *backend-env
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: loadwatch
+      POSTGRES_PASSWORD: loadwatch  # DEV-ONLY, порт наружу не публикуется
+      POSTGRES_DB: loadwatch
+    # Урезано под лимит контейнера 256 МБ (для VPS без Docker — deploy/postgresql-1gb.conf).
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - max_connections=20
+      - -c
+      - effective_cache_size=192MB
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loadwatch -d loadwatch"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 256m
+    restart: unless-stopped
+
+  # Одноразовый сервис: применяет миграции и завершается; API ждёт его успеха.
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    healthcheck:
+      disable: true
+    restart: "no"
+    mem_limit: 256m
+
+  api:
+    <<: *backend
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    # Наружу API не публикуется: браузер ходит через фронтенд (/api/ → api:8000).
+    expose:
+      - "8000"
+    mem_limit: 250m
+    restart: unless-stopped
+
+  # supercronic: runner раз в минуту, сводка раз в час, очистка раз в сутки
+  # (docker/crontab). Вывод задач — docker compose logs -f runner.
+  runner:
+    <<: *backend
+    command: ["supercronic", "-passthrough-logs", "/app/docker/crontab"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      disable: true
+    mem_limit: 400m
+    # Тест длится до MAX_DURATION_SEC; оборванный запуск runner сам переведёт в failed.
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  # Демо-сайт для нагрузки. Адрес для LoadWatch: http://demo-target:8081
+  # Подтверждение владения файлом: задайте DEMO_VERIFY_TOKEN (токен из LoadWatch)
+  # в shell или .env и выполните docker compose up -d demo-target.
+  demo-target:
+    build:
+      context: .
+      dockerfile: docker/demo-target.Dockerfile
+    image: loadwatch-demo-target:local
+    environment:
+      DEMO_PORT: "8081"
+      DEMO_VERIFY_TOKEN: ${DEMO_VERIFY_TOKEN:-}
+      DEMO_CAPACITY_RPS: ${DEMO_CAPACITY_RPS:-50}
+      DEMO_LATENCY_MS: ${DEMO_LATENCY_MS:-0}
+      DEMO_ADMIN_TOKEN: ${DEMO_ADMIN_TOKEN:-}
+    ports:
+      - "127.0.0.1:${DEMO_HOST_PORT:-8081}:8081"
+    mem_limit: 96m
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      args:
+        API_UPSTREAM: api:8000
+    image: loadwatch-frontend:local
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    mem_limit: 32m
+    restart: unless-stopped
+
+volumes:
+  pgdata:

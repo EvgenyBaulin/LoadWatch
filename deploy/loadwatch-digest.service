@@ -1,0 +1,40 @@
+# Еженедельная сводка: проверка каждый час, письма тем, у кого наступил выбранный час.
+# Запускается loadwatch-digest.timer — альтернатива строке в crontab.example (не оба сразу).
+[Unit]
+Description=LoadWatch weekly digest (checked hourly)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=loadwatch
+Group=loadwatch
+WorkingDirectory=/opt/loadwatch
+EnvironmentFile=/etc/loadwatch/env
+Environment=LOADWATCH_ENV_FILE=
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/loadwatch/.venv/bin/python -m loadwatch.digest
+Nice=10
+MemoryMax=200M
+TimeoutStartSec=10min
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+UMask=0027

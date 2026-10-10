@@ -1,21 +1,27 @@
+# CI: проверки бэкенда, фронтенда и сборка Docker-образов (без публикации).
+# Файл .env не нужен и не используется: тесты получают настройки из окружения
+# (LOADWATCH_ENV_FILE="" отключает чтение файла).
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  # Вызывается из deploy.yml: деплой идёт только после зелёных проверок.
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   backend:
     name: Backend (ruff, mypy, pytest)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16-alpine
@@ -36,9 +42,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Кэш uv (скачанные колёса) по хэшу uv.lock.
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
+          cache-dependency-glob: uv.lock
 
       - name: Install dependencies
         run: uv sync --locked
@@ -49,13 +57,81 @@ jobs:
           uv run ruff format --check .
 
       - name: Mypy
-        run: uv run mypy loadwatch tests
+        run: uv run mypy loadwatch tests migrations demo_target scripts
 
       - name: Pytest
-        run: uv run pytest --cov=loadwatch --cov-report=term-missing --cov-report=xml
+        run: uv run pytest --cov=loadwatch --cov-report=xml --cov-report=term
+
+      # Порог 80% — для ядра (runner, flow, metrics, verification, security, alerts,
+      # сценарии), а не для всего пакета: роутеры и
+      # шаблоны покрываются API-тестами, но порог на них не нужен.
+      - name: Core coverage >= 80%
+        run: >-
+          uv run coverage report --fail-under=80 --skip-covered
+          --include='loadwatch/runner/*,loadwatch/flow/*,loadwatch/metrics/*,loadwatch/verification/*,loadwatch/security/*,loadwatch/alerts/*,loadwatch/services/scenario_service.py'
 
       - name: Upload coverage report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage
           path: coverage.xml
+          if-no-files-found: ignore
+
+  frontend:
+    name: Frontend (lint, type-check, i18n, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      # Кэш npm по хэшу package-lock.json.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run type-check
+      - run: npm run i18n:check
+      - run: npm run build
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+
+  docker:
+    name: Docker images (build only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: loadwatch-api
+            dockerfile: Dockerfile
+          - image: loadwatch-frontend
+            dockerfile: docker/frontend.Dockerfile
+          - image: loadwatch-demo-target
+            dockerfile: docker/demo-target.Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      # Только сборка: образ не публикуется (публикация — deploy.yml по тегу).
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
+          tags: ${{ matrix.image }}:ci
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

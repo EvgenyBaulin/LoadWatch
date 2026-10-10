@@ -1,0 +1,16 @@
+# Таймер runner: раз в минуту (альтернатива cron).
+# systemctl enable --now loadwatch-runner.timer ; systemctl list-timers loadwatch-*
+# Пока предыдущий проход идёт, новый не стартует (oneshot-сервис ещё активен) —
+# это заменяет flock из crontab.
+[Unit]
+Description=Run LoadWatch runner every minute
+
+[Timer]
+OnCalendar=minutely
+AccuracySec=1s
+# Пропущенный из-за выключения запуск выполняется сразу после загрузки.
+Persistent=true
+Unit=loadwatch-runner.service
+
+[Install]
+WantedBy=timers.target

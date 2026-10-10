@@ -1,0 +1,137 @@
+# АЛЬТЕРНАТИВНЫЙ продакшен-вариант LoadWatch в Docker.
+#
+# ============================================================================
+#  ВНИМАНИЕ: основной и рекомендуемый путь на VPS 1 vCPU / 1 ГБ RAM —
+#  systemd + cron + Nginx без Docker (каталог deploy/, docs/DEPLOY.md).
+#  Docker на 1 ГБ заметно съедает память: демон dockerd + containerd ~80-120 МБ,
+#  по процессу containerd-shim на контейнер, отдельный Nginx в контейнере, плюс
+#  page cache образов. Лимиты ниже в сумме ~940 МБ — это на грани, держите
+#  swap 1 ГБ. Этот файл имеет смысл на тарифе с 2 ГБ RAM или для переноса
+#  на другой хост «как есть».
+# ============================================================================
+#
+# Схема: Nginx хоста (TLS, Let's Encrypt, deploy/nginx-docker.conf)
+#        → 127.0.0.1:8080 контейнер frontend (статика + /api/)
+#        → контейнер api. Runner — supercronic в своём контейнере.
+# Демо-цели здесь нет, ALLOW_PRIVATE_TARGETS=false.
+#
+# Подготовка:
+#   1. Файл окружения (по умолчанию /etc/loadwatch/docker.env, права 600, владелец
+#      root; другой путь — переменная LOADWATCH_ENV_PATH). Формат KEY=value, как у
+#      /etc/loadwatch/env для systemd, но адрес базы другой — хост postgres.
+#      Обязательные: DATABASE_URL, POSTGRES_PASSWORD (тот же пароль, что в DATABASE_URL),
+#      JWT_SECRET, SECRETS_ENCRYPTION_KEY, PUBLIC_BASE_URL, CORS_ORIGINS,
+#      REGISTRATION_MODE=invite, REGISTRATION_INVITE_CODE.
+#      Пример DATABASE_URL: postgresql+psycopg://loadwatch:<пароль>@postgres:5432/loadwatch
+#      Без файла compose не стартует (required: true) — это намеренно.
+#   2. Запуск со сборкой на сервере:
+#        docker compose -f docker-compose.prod.yml up -d --build
+#      или с готовыми образами из GHCR (публикует deploy.yml по тегу v*):
+#        LOADWATCH_IMAGE_PREFIX=ghcr.io/<owner>/ LOADWATCH_TAG=1.0.0 \
+#          docker compose -f docker-compose.prod.yml up -d --no-build
+name: loadwatch-prod
+
+x-backend: &backend
+  image: ${LOADWATCH_IMAGE_PREFIX:-}loadwatch-api:${LOADWATCH_TAG:-local}
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file:
+    - path: ${LOADWATCH_ENV_PATH:-/etc/loadwatch/docker.env}
+      required: true
+  environment:
+    ENVIRONMENT: production
+    LOADWATCH_ENV_FILE: ""
+    # Защита от SSRF включена всегда: в проде тестировать внутреннюю сеть нельзя.
+    ALLOW_PRIVATE_TARGETS: "false"
+  logging: &logging
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    env_file:
+      - path: ${LOADWATCH_ENV_PATH:-/etc/loadwatch/docker.env}
+        required: true
+    environment:
+      POSTGRES_USER: loadwatch
+      POSTGRES_DB: loadwatch
+      # POSTGRES_PASSWORD приходит из env-файла.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - max_connections=20
+      - -c
+      - effective_cache_size=192MB
+      - -c
+      - maintenance_work_mem=32MB
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loadwatch -d loadwatch"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    mem_limit: 256m
+    logging: *logging
+    restart: always
+
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    healthcheck:
+      disable: true
+    mem_limit: 256m
+    restart: "no"
+
+  api:
+    <<: *backend
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    expose:
+      - "8000"
+    mem_limit: 250m
+    restart: always
+
+  runner:
+    <<: *backend
+    command: ["supercronic", "-passthrough-logs", "/app/docker/crontab"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      disable: true
+    mem_limit: 400m
+    stop_grace_period: 30s
+    restart: always
+
+  frontend:
+    image: ${LOADWATCH_IMAGE_PREFIX:-}loadwatch-frontend:${LOADWATCH_TAG:-local}
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      args:
+        API_UPSTREAM: api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    # Только localhost: снаружи доступ через Nginx хоста с TLS.
+    ports:
+      - "127.0.0.1:8080:80"
+    mem_limit: 32m
+    logging: *logging
+    restart: always
+
+volumes:
+  pgdata:

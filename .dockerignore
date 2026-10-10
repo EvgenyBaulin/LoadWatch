@@ -1,0 +1,37 @@
+# Что не попадает в контекст сборки Docker.
+# Главное — секреты: файлы окружения никогда не должны оказаться в образе.
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Git, кэши и локальные окружения
+.git
+.github
+.venv
+**/__pycache__
+**/*.py[cod]
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.coverage
+.coverage.*
+coverage.xml
+htmlcov
+
+# Фронтенд: зависимости и сборка ставятся внутри образа заново
+frontend/node_modules
+frontend/dist
+
+# Документация в образах не нужна (Dockerfile'ы и так копируют только нужное)
+*.md
+**/*.md
+docs
+
+# ОС и редакторы
+.DS_Store
+.idea
+.vscode
+logs
+reports
+*.log

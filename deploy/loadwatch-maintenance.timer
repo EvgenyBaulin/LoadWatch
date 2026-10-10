@@ -1,0 +1,13 @@
+# Таймер для loadwatch-maintenance.service (альтернатива cron).
+[Unit]
+Description=Schedule LoadWatch retention cleanup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+AccuracySec=30s
+Persistent=true
+RandomizedDelaySec=0
+Unit=loadwatch-maintenance.service
+
+[Install]
+WantedBy=timers.target

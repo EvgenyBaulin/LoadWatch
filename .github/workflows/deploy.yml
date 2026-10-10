@@ -1,0 +1,152 @@
+# CD: выкладка на VPS (основной путь: systemd + cron + Nginx) и, по тегу,
+# публикация Docker-образов в GHCR.
+#
+# Запуск: тег v* (git tag v1.0.0 && git push origin v1.0.0) или вручную
+# (Actions → Deploy → Run workflow).
+#
+# Секреты (Settings → Environments → production → Secrets):
+#   DEPLOY_HOST         адрес сервера (IP или домен)
+#   DEPLOY_USER         пользователь для SSH (deploy, создаёт bootstrap-server.sh)
+#   DEPLOY_SSH_KEY      приватный ключ (OpenSSH), публичная часть — в authorized_keys deploy
+#   DEPLOY_KNOWN_HOSTS  строка(и) из ssh-keyscan -H <host>: защищает от подмены сервера
+#   DEPLOY_PORT         порт SSH (необязательно, по умолчанию 22)
+# Секреты приложения в GitHub не хранятся: они только в /etc/loadwatch/env на сервере.
+name: Deploy
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Те же проверки, что и в CI: на сервер попадает только зелёный код.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Deploy to VPS
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://loadwatch.tarakan-tuc.ru
+    # Один деплой за раз; начатый не отменяется (миграции не должны рваться на середине).
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      # Фронтенд собирается здесь: на VPS Node не ставится.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Upload code and frontend/dist (rsync)
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+          PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+        run: |
+          echo "${GITHUB_SHA::7} ${GITHUB_REF_NAME}" > .deploy-revision
+          # --delete убирает удалённые из репозитория файлы; .venv на сервере не трогается
+          # (исключённые пути rsync не удаляет). Секреты и dev-файлы не копируются.
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p $PORT -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes" \
+            --exclude='.git/' --exclude='.github/' --exclude='.venv/' \
+            --exclude='.env' --exclude='.env.*' \
+            --exclude='__pycache__/' --exclude='.mypy_cache/' --exclude='.pytest_cache/' \
+            --exclude='.ruff_cache/' --exclude='tests/' \
+            --include='frontend/' --include='frontend/dist/***' --exclude='frontend/*' \
+            ./ "$SSH_USER@$HOST:/opt/loadwatch/"
+
+      - name: Run deploy/deploy.sh on the server
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+          PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "$PORT" -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes \
+            "$SSH_USER@$HOST" 'cd /opt/loadwatch && bash deploy/deploy.sh'
+
+      - name: Public health check
+        run: curl -fsS --retry 5 --retry-delay 3 --retry-all-errors https://loadwatch.tarakan-tuc.ru/api/v1/health
+
+      - name: Remove SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
+
+  # Необязательная публикация образов в GHCR (альтернативный Docker-путь).
+  publish-images:
+    name: Publish images to GHCR
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: loadwatch-api
+            dockerfile: Dockerfile
+          - image: loadwatch-frontend
+            dockerfile: docker/frontend.Dockerfile
+          - image: loadwatch-demo-target
+            dockerfile: docker/demo-target.Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Имя владельца в GHCR должно быть в нижнем регистре; metadata-action это делает сам.
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

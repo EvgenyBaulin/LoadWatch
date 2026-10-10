@@ -1,5 +1,8 @@
 # Задачи LoadWatch для пользователя loadwatch (crontab -u loadwatch deploy/crontab.example).
 # Время cron — в часовом поясе сервера; держите сервер в UTC.
+# Альтернатива — systemd-таймеры (loadwatch-*.timer): включайте что-то одно, иначе
+# задачи пойдут дважды. Логи ниже ротирует deploy/logrotate.d/loadwatch.
+# Переменные приложения cron не передаёт: их читает сам Python из LOADWATCH_ENV_FILE.
 # flock -n: если прошлый запуск ещё работает, новый сразу выходит, а не встаёт в очередь.
 SHELL=/bin/bash
 PATH=/usr/local/bin:/usr/bin:/bin

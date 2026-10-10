@@ -1,0 +1,21 @@
+# Ротация логов задач LoadWatch из cron (crontab.example).
+# Установка: /etc/logrotate.d/loadwatch (bootstrap-server.sh). Проверка:
+#   logrotate --debug /etc/logrotate.d/loadwatch
+# copytruncate: cron дописывает через >>, файл держит открытым только на время задачи,
+# поэтому усечение на месте безопасно и не требует сигналов процессам.
+# RUNNER_LOG_FILE (если задан) сюда НЕ входит: у него своя ротация в Python
+# (RotatingFileHandler), двойная ротация испортила бы файл.
+/var/log/loadwatch/runner-cron.log
+/var/log/loadwatch/digest.log
+/var/log/loadwatch/maintenance.log
+{
+    daily
+    rotate 14
+    maxsize 50M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    su loadwatch loadwatch
+}

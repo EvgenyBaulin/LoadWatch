@@ -1,0 +1,51 @@
+# LoadWatch runner: один проход (очередь, расписания, перепроверка владения).
+# Запускается таймером loadwatch-runner.timer — это АЛЬТЕРНАТИВА строке runner
+# в crontab.example. Включайте что-то одно, не оба сразу.
+# Логи: journalctl -u loadwatch-runner
+[Unit]
+Description=LoadWatch runner tick
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=loadwatch
+Group=loadwatch
+WorkingDirectory=/opt/loadwatch
+EnvironmentFile=/etc/loadwatch/env
+Environment=LOADWATCH_ENV_FILE=
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/loadwatch/.venv/bin/python -m loadwatch.runner
+
+# Генератор нагрузки уступает CPU API, чтобы интерфейс оставался отзывчивым.
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+MemoryMax=400M
+MemoryHigh=360M
+TasksMax=64
+# RUNNER_MAX_RUNTIME_SEC (600) + запас на последний тест.
+TimeoutStartSec=15min
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+UMask=0027
+# Для RUNNER_LOG_FILE, если он задан.
+ReadWritePaths=/var/log/loadwatch

@@ -1,0 +1,62 @@
+# LoadWatch Web API (FastAPI + uvicorn). Работает постоянно.
+# Установка: /etc/systemd/system/loadwatch-api.service, затем
+#   systemctl daemon-reload && systemctl enable --now loadwatch-api
+# Логи: journalctl -u loadwatch-api -f
+[Unit]
+Description=LoadWatch API
+Documentation=file:///opt/loadwatch/docs/DEPLOY.md
+After=network-online.target postgresql.service
+Wants=network-online.target postgresql.service
+
+[Service]
+Type=exec
+User=loadwatch
+Group=loadwatch
+WorkingDirectory=/opt/loadwatch
+
+# Значение по умолчанию; EnvironmentFile ниже его переопределяет (API_WORKERS=2 для large).
+Environment=API_WORKERS=1
+EnvironmentFile=/etc/loadwatch/env
+# Переменные уже в окружении процесса — приложение не читает файл само.
+Environment=LOADWATCH_ENV_FILE=
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+
+# Слушает только localhost: снаружи — через Nginx. X-Forwarded-* доверяются только от него.
+ExecStart=/opt/loadwatch/.venv/bin/uvicorn --factory loadwatch.api.main:create_app \
+    --host 127.0.0.1 --port 8000 --workers ${API_WORKERS} \
+    --proxy-headers --forwarded-allow-ips 127.0.0.1 --no-server-header
+
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+
+# Лимиты: 1 ГБ RAM на всё. Для 2 воркеров (профиль large, 2 ГБ) поднимите до ~400M.
+MemoryMax=250M
+MemoryHigh=220M
+TasksMax=64
+
+# Песочница: процессу нужны только сеть и чтение кода.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+UMask=0027
+ReadWritePaths=/var/log/loadwatch
+
+[Install]
+WantedBy=multi-user.target

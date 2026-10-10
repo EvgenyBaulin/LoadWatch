@@ -1,0 +1,42 @@
+# Демо-цель LoadWatch (demo_target) на 127.0.0.1:8081 — ТОЛЬКО для демонстраций.
+#
+# Чтобы LoadWatch мог её тестировать, нужен ALLOW_PRIVATE_TARGETS=true в
+# /etc/loadwatch/env, а это отключает защиту от SSRF для всех пользователей.
+# На публичном сервере с открытой регистрацией так делать нельзя: включайте
+# только на время демо или на отдельном стенде. На одном ядре демо-сайт и
+# генератор делят CPU — цифры демо ориентировочные.
+#
+# Настройки демо (DEMO_VERIFY_TOKEN, DEMO_CAPACITY_RPS, DEMO_LATENCY_MS …) —
+# в необязательном файле /etc/loadwatch/demo.env (права 640, root:loadwatch).
+[Unit]
+Description=LoadWatch demo target
+After=network.target
+
+[Service]
+Type=exec
+User=loadwatch
+Group=loadwatch
+WorkingDirectory=/opt/loadwatch
+Environment=DEMO_HOST=127.0.0.1
+Environment=DEMO_PORT=8081
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=-/etc/loadwatch/demo.env
+ExecStart=/opt/loadwatch/.venv/bin/python -m demo_target
+Restart=on-failure
+RestartSec=3
+MemoryMax=96M
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=

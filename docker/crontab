@@ -1,0 +1,14 @@
+# Расписание для контейнера runner (supercronic, время — UTC контейнера).
+# Тот же набор задач, что и deploy/crontab.example для VPS.
+# supercronic не запускает задачу, пока предыдущий её запуск не закончился,
+# поэтому flock здесь не нужен; от двух runner защищает ещё и блокировка в БД.
+# Вывод задач идёт в stdout контейнера: docker compose logs runner.
+
+# Runner: раз в минуту — зависшие запуски, перепроверка владения, расписания, очередь.
+* * * * * python -m loadwatch.runner
+
+# Еженедельная сводка: каждый час — тем, у кого наступили выбранные день и час.
+5 * * * * python -m loadwatch.digest
+
+# Очистка по RETENTION_DAYS: раз в сутки ночью.
+30 3 * * * python -m loadwatch.maintenance
