@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from loadwatch import __version__
 from loadwatch.api.error_handlers import register_error_handlers
 from loadwatch.api.rate_limit import SlidingWindowRateLimiter
-from loadwatch.api.routers import auth, health, sites, users
+from loadwatch.api.routers import auth, health, scenarios, sites, users
 from loadwatch.config import Settings, get_settings
 from loadwatch.db import create_db_engine, create_session_factory
 from loadwatch.logging_setup import configure_logging, warn_about_unsafe_settings
@@ -50,6 +50,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.session_factory = create_session_factory(engine)
     app.state.auth_rate_limiter = SlidingWindowRateLimiter(settings.auth_rate_limit_per_minute)
     app.state.verify_rate_limiter = SlidingWindowRateLimiter(settings.verify_rate_limit_per_minute)
+    app.state.dry_run_rate_limiter = SlidingWindowRateLimiter(
+        settings.dry_run_rate_limit_per_minute
+    )
     # Подменяются в тестах: сеть и DNS в тестах не используются.
     app.state.verifiers = default_registry(settings)
     app.state.resolver = system_resolver
@@ -62,6 +65,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["Authorization", "Content-Type"],
     )
-    for module in (health, auth, users, sites):
+    for module in (health, auth, users, sites, scenarios):
         app.include_router(module.router, prefix=API_PREFIX)
     return app

@@ -16,6 +16,8 @@ def configure_logging(settings: Settings) -> None:
     # SQL и строки доступа на уровне DEBUG слишком шумные.
     logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    # httpcore на DEBUG пишет заголовки запросов и ответов — там могут быть секреты.
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 def warn_about_unsafe_settings(settings: Settings) -> None:

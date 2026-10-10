@@ -113,3 +113,35 @@ class VerificationFailedError(AppError):
     code = "verification_failed"
     status_code = 422
     message = "Ownership verification failed"
+
+
+class ScenarioExistsError(AppError):
+    """У сайта уже есть сценарий с таким названием."""
+
+    code = "scenario_exists"
+    status_code = 409
+    message = "A scenario with this name already exists for the site"
+
+
+class SiteNotVerifiedError(AppError):
+    """Действие доступно только для подтверждённого сайта."""
+
+    code = "site_not_verified"
+    status_code = 409
+    message = "Verify site ownership first"
+
+
+class TargetUnresolvableError(AppError):
+    """Имя сайта не резолвится."""
+
+    code = "target_unresolvable"
+    status_code = 422
+    message = "The site host name cannot be resolved"
+
+
+class SecretsUnavailableError(AppError):
+    """Ключ шифрования секретов не настроен на сервере."""
+
+    code = "secrets_unavailable"
+    status_code = 503
+    message = "Secrets storage is not configured on the server"

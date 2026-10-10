@@ -202,3 +202,103 @@ def test_unknown_run() -> None:
     service = RunService(NoSession(), None, resolver=FakeDns())  # type: ignore[arg-type]
     with pytest.raises(LookupError):
         service.execute(uuid.uuid4())
+
+
+LOGIN_FLOW: list[dict[str, Any]] = [
+    {
+        "name": "login",
+        "method": "POST",
+        "path": "/api/login",
+        "body": {
+            "type": "json",
+            "content": {"username": "demo", "password": "{{secret.PASSWORD}}"},
+        },
+        "extract": [{"var": "token", "source": "json", "expr": "data.token"}],
+    },
+    {
+        "name": "dashboard",
+        "path": "/dashboard",
+        "headers": {"Authorization": "Bearer {{token}}"},
+        "assert_contains": "Welcome",
+    },
+]
+
+
+def add_secret(session: Session, run: TestRun, key: str, value: str) -> None:
+    from loadwatch.models import ScenarioSecret
+    from loadwatch.security.secrets import SecretBox
+
+    assert run.scenario_id is not None
+    scenario = session.get(Scenario, run.scenario_id)
+    assert scenario is not None
+    scenario.flow = LOGIN_FLOW
+    session.add(
+        ScenarioSecret(
+            scenario_id=scenario.id, name="PASSWORD", value_encrypted=SecretBox(key).encrypt(value)
+        )
+    )
+    session.commit()
+
+
+def test_multi_step_run_with_secret(
+    session: Session,
+    make_settings: Callable[..., Settings],
+    dns: FakeDns,
+    target_port: int,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    import json
+    import logging
+
+    from cryptography.fernet import Fernet
+
+    caplog.set_level(logging.DEBUG)
+    key = Fernet.generate_key().decode()
+    run = make_run(session, target_port)
+    add_secret(session, run, key, "s3cret-pass")
+    service(session, make_settings, dns, secrets_encryption_key=key).execute(run.id)
+    session.refresh(run)
+    assert run.status == RunStatus.FINISHED, run.error
+    metrics = session.get(RunMetrics, run.id)
+    assert metrics is not None
+    assert metrics.error_rate == 0
+    assert {step["name"] for step in metrics.summary["steps"]} == {"login", "dashboard"}
+    stored = json.dumps([run.params, metrics.summary, metrics.series])
+    assert "s3cret-pass" not in stored
+    assert "s3cret-pass" not in caplog.text
+
+
+def test_run_fails_without_secret(
+    session: Session, make_settings: Callable[..., Settings], dns: FakeDns, target_port: int
+) -> None:
+    run = make_run(session, target_port)
+    assert run.scenario_id is not None
+    scenario = session.get(Scenario, run.scenario_id)
+    assert scenario is not None
+    scenario.flow = LOGIN_FLOW
+    session.commit()
+    service(session, make_settings, dns).execute(run.id)
+    session.refresh(run)
+    assert (run.status, run.error) == (RunStatus.FAILED, "missing_secret")
+
+
+def test_run_fails_with_wrong_key(
+    session: Session, make_settings: Callable[..., Settings], dns: FakeDns, target_port: int
+) -> None:
+    from cryptography.fernet import Fernet
+
+    run = make_run(session, target_port)
+    add_secret(session, run, Fernet.generate_key().decode(), "s3cret-pass")
+    other_key = Fernet.generate_key().decode()
+    service(session, make_settings, dns, secrets_encryption_key=other_key).execute(run.id)
+    session.refresh(run)
+    assert run.error == "secrets_unavailable"
+
+
+def test_run_fails_with_invalid_stored_flow(
+    session: Session, make_settings: Callable[..., Settings], dns: FakeDns, target_port: int
+) -> None:
+    run = make_run(session, target_port, path="https://evil.example/")
+    service(session, make_settings, dns).execute(run.id)
+    session.refresh(run)
+    assert run.error == "invalid_flow"

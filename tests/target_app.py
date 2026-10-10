@@ -42,6 +42,45 @@ async def gzip_bomb() -> Response:
     return Response(body, headers={"Content-Encoding": "gzip"})
 
 
+TOKENS: set[str] = set()
+
+
+@app.post("/api/login")
+async def login(request: Request) -> Response:
+    data = await request.json()
+    if data.get("username") != "demo" or data.get("password") != "s3cret-pass":
+        return PlainTextResponse("bad credentials", status_code=401)
+    token = f"tok-{len(TOKENS) + 1}"
+    TOKENS.add(token)
+    response = Response(f'{{"data": {{"token": "{token}"}}}}', media_type="application/json")
+    response.set_cookie("session", f"sess-{token}")
+    return response
+
+
+@app.get("/dashboard")
+async def dashboard(request: Request) -> PlainTextResponse:
+    auth = request.headers.get("authorization", "")
+    if not auth.startswith("Bearer ") or auth.removeprefix("Bearer ") not in TOKENS:
+        return PlainTextResponse("unauthorized", status_code=401)
+    cookie = request.cookies.get("session", "")
+    return PlainTextResponse(f"Welcome, demo! session={cookie}")
+
+
+@app.api_route("/echo", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+async def echo(request: Request) -> Response:
+    import json
+
+    body = (await request.body()).decode()
+    payload = {
+        "method": request.method,
+        "path": request.url.path,
+        "query": request.url.query,
+        "headers": {k.lower(): v for k, v in request.headers.items()},
+        "body": body,
+    }
+    return Response(json.dumps(payload), media_type="application/json")
+
+
 @app.get("/status/{code}")
 async def status(code: int) -> PlainTextResponse:
     return PlainTextResponse("status", status_code=code)

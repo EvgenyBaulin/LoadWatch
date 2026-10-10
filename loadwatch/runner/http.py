@@ -144,6 +144,11 @@ class PinnedRequester:
         self._max_response_bytes = max_response_bytes
         self._rate_limiter = rate_limiter
 
+    @property
+    def target(self) -> PinnedTarget:
+        """Цель с закреплённым IP."""
+        return self._target
+
     async def request(
         self,
         step: str,

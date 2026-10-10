@@ -19,13 +19,16 @@ from sqlalchemy.orm import Session
 
 from loadwatch.config import Settings
 from loadwatch.db import utcnow
+from loadwatch.flow import FlowExecutor, parse_flow
 from loadwatch.metrics import MetricsCollector
 from loadwatch.models import RunMetrics, RunStatus, Scenario, Site, TestRun
 from loadwatch.repositories.run_repository import RunRepository
-from loadwatch.runner.generator import Iteration, LoadRunner, RunLimits, RunOutcome, simple_get
+from loadwatch.runner.generator import Iteration, LoadRunner, RunLimits, RunOutcome
 from loadwatch.runner.http import PinnedRequester, TokenBucket, new_load_client
 from loadwatch.runner.profiles import LoadProfile, ProfileLimits, profile_from_dict
 from loadwatch.security import ssrf
+from loadwatch.security.secrets import SecretsUnavailableError
+from loadwatch.services.scenario_service import load_secrets
 
 logger = logging.getLogger(__name__)
 
@@ -127,13 +130,23 @@ class RunService:
                 max_duration_sec=self._settings.max_duration_sec,
             )
         )
-        path = str(scenario.flow[0].get("path", "/")) if scenario.flow else "/"
+        try:
+            flow = parse_flow(scenario.flow)
+        except ValueError:
+            raise RunAbortedError("invalid_flow") from None
+        try:
+            secrets = load_secrets(self._session, self._settings, scenario.id)
+        except SecretsUnavailableError:
+            raise RunAbortedError("secrets_unavailable") from None
+        if flow.secret_names() - secrets.keys():
+            raise RunAbortedError("missing_secret")
+        # В параметрах только описание потока: значения секретов не попадают в БД открыто.
         params = {"profile": profile.to_dict(), "flow": scenario.flow}
         return PreparedRun(
             pinned=pinned,
             dns_ms=dns_ms,
             profile=profile,
-            iteration=simple_get(path),
+            iteration=FlowExecutor(flow, secrets),
             apdex_t_ms=float(scenario.apdex_t_ms),
             params=params,
         )

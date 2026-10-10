@@ -13,6 +13,7 @@ from loadwatch.config import Settings
 from loadwatch.errors import NotAuthenticatedError
 from loadwatch.models import User
 from loadwatch.services.auth_service import AuthService
+from loadwatch.services.scenario_service import ScenarioService
 from loadwatch.services.site_service import SiteService
 
 _bearer = HTTPBearer(auto_error=False, description="Access token from /auth/login")
@@ -62,3 +63,13 @@ def get_site_service(request: Request, session: SessionDep, settings: SettingsDe
 
 
 SiteServiceDep = Annotated[SiteService, Depends(get_site_service)]
+
+
+def get_scenario_service(
+    request: Request, session: SessionDep, settings: SettingsDep
+) -> ScenarioService:
+    """Сервис сценариев с резолвером приложения."""
+    return ScenarioService(session, settings, request.app.state.resolver)
+
+
+ScenarioServiceDep = Annotated[ScenarioService, Depends(get_scenario_service)]
