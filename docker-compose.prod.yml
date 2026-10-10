@@ -26,7 +26,7 @@
 #      Без файла compose не стартует (required: true) — это намеренно.
 #   2. Запуск со сборкой на сервере:
 #        docker compose -f docker-compose.prod.yml up -d --build
-#      или с готовыми образами из GHCR (публикует deploy.yml по тегу v*):
+#      или с готовыми образами из GHCR (публикует deploy.yml при выпуске релиза):
 #        LOADWATCH_IMAGE_PREFIX=ghcr.io/<owner>/ LOADWATCH_TAG=1.0.0 \
 #          docker compose -f docker-compose.prod.yml up -d --no-build
 name: loadwatch-prod
