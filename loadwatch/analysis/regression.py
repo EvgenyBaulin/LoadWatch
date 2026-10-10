@@ -93,7 +93,11 @@ class RegressionDetector:
         findings: list[Finding] = []
         count = len(history)
         p95 = baseline["p95_ms"]
-        if p95 and current.p95_ms > p95 * (1 + settings.regression_p95_increase_pct / 100):
+        if (
+            p95
+            and current.p95_ms > p95 * (1 + settings.regression_p95_increase_pct / 100)
+            and current.p95_ms - p95 >= settings.regression_p95_min_increase_ms
+        ):
             findings.append(self._finding("p95_ms", current.p95_ms, p95, count, relative=True))
         errors = baseline["error_rate"]
         if (

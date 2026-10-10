@@ -17,6 +17,7 @@ from loadwatch.api.rate_limit import SlidingWindowRateLimiter
 from loadwatch.api.routers import (
     auth,
     dashboard,
+    exports,
     health,
     notifications,
     runs,
@@ -84,6 +85,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["Authorization", "Content-Type"],
     )
-    for module in (health, auth, users, sites, scenarios, runs, dashboard, notifications):
+    for module in (health, auth, users, sites, scenarios, runs, dashboard, notifications, exports):
         app.include_router(module.router, prefix=API_PREFIX)
     return app

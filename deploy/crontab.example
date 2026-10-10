@@ -11,5 +11,5 @@ LOADWATCH_ENV_FILE=/etc/loadwatch/env
 # Еженедельная сводка: каждый час — тем, у кого наступили выбранные день и час (их часовой пояс).
 5 * * * * cd /opt/loadwatch && flock -n /tmp/loadwatch-digest.lock .venv/bin/python -m loadwatch.digest >> /var/log/loadwatch/digest.log 2>&1
 
-# Очистка по RETENTION_DAYS (фаза 8): раз в сутки ночью.
-# 30 3 * * * cd /opt/loadwatch && flock -n /tmp/loadwatch-maintenance.lock .venv/bin/python -m loadwatch.maintenance >> /var/log/loadwatch/maintenance.log 2>&1
+# Очистка по RETENTION_DAYS: раз в сутки ночью.
+30 3 * * * cd /opt/loadwatch && flock -n /tmp/loadwatch-maintenance.lock .venv/bin/python -m loadwatch.maintenance >> /var/log/loadwatch/maintenance.log 2>&1

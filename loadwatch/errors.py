@@ -221,3 +221,11 @@ class ScenarioRequiredError(AppError):
     code = "scenario_required"
     status_code = 422
     message = "Specify scenario_id: the site has several scenarios and no schedule"
+
+
+class RunHasNoMetricsError(AppError):
+    """У запуска ещё нет метрик (в очереди, упал до начала или отменён)."""
+
+    code = "run_has_no_metrics"
+    status_code = 409
+    message = "The run has no metrics to export"

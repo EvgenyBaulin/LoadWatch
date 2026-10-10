@@ -201,6 +201,12 @@ def test_small_change_is_not_regression(detector: RegressionDetector) -> None:
     assert result.baseline["p95_ms"] == 100
 
 
+def test_tiny_absolute_change_is_noise(detector: RegressionDetector) -> None:
+    """2 → 4 мс — это +100%, но всего 2 мс: шум, а не регрессия."""
+    result = detector.detect(RunPoint(4, 0.0, 0.95, None), history([2, 2, 2]))
+    assert result is not None and not result.detected
+
+
 def test_not_enough_history(detector: RegressionDetector) -> None:
     assert detector.detect(RunPoint(999, 0.5, 0.1, None), history([100, 100])) is None
 

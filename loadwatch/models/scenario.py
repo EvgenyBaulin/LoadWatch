@@ -12,7 +12,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from loadwatch.db import Base, TimestampMixin
 
 # В PostgreSQL — JSONB (компактнее и индексируется), в остальных базах — обычный JSON.
-JsonType = JSON().with_variant(JSONB(), "postgresql")
+# none_as_null: Python None — это SQL NULL, а не JSON-значение null (иначе IS NULL не сработает).
+JsonType = JSON(none_as_null=True).with_variant(JSONB(none_as_null=True), "postgresql")
 
 
 def default_flow() -> list[dict[str, Any]]:

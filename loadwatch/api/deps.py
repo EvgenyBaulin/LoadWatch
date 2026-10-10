@@ -16,6 +16,7 @@ from loadwatch.models import User
 from loadwatch.services.auth_service import AuthService
 from loadwatch.services.channel_service import ChannelService
 from loadwatch.services.dashboard_service import DashboardService
+from loadwatch.services.export_service import ExportService
 from loadwatch.services.hook_service import HookService
 from loadwatch.services.run_queue_service import RunQueueService
 from loadwatch.services.scenario_service import ScenarioService
@@ -131,3 +132,11 @@ def get_alert_manager(
 
 
 AlertManagerDep = Annotated[AlertManager, Depends(get_alert_manager)]
+
+
+def get_export_service(session: SessionDep, settings: SettingsDep) -> ExportService:
+    """Сервис экспорта."""
+    return ExportService(session, settings)
+
+
+ExportServiceDep = Annotated[ExportService, Depends(get_export_service)]

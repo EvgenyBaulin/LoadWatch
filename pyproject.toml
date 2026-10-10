@@ -36,6 +36,7 @@ dev = [
     "mypy>=1.11",
     "pre-commit>=3.8",
     "types-croniter",
+    "pypdf>=6.20.0",
 ]
 
 [build-system]
@@ -56,7 +57,7 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "S", "SIM", "RUF", "D"]
 ignore = ["D105", "D107", "D203", "D213", "RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S104", "S105", "S106", "D"]
+"tests/**" = ["S101", "S104", "S105", "S106", "D", "E501"]  # длинные SQL и JSON в фикстурах
 "demo_target/**" = ["S311"]
 "scripts/**" = ["T20"]
 

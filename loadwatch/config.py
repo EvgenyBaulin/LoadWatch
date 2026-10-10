@@ -141,6 +141,8 @@ class Settings(BaseSettings):
     regression_baseline_runs: int = Field(default=5, ge=1)
     regression_min_baseline_runs: int = Field(default=3, ge=1)
     regression_p95_increase_pct: float = Field(default=30.0, gt=0)
+    # И не меньше чем на столько мс: 2 → 3 мс — это шум, а не регрессия.
+    regression_p95_min_increase_ms: float = Field(default=10.0, ge=0)
     regression_error_rate_increase: float = Field(default=0.02, gt=0)  # абсолютные доли
     regression_apdex_drop: float = Field(default=0.1, gt=0)
     regression_ceiling_drop_pct: float = Field(default=20.0, gt=0)
