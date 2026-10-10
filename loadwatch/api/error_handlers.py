@@ -13,7 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from loadwatch.errors import AppError, RateLimitedError
+from loadwatch.errors import AppError
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,8 @@ def _validation_details(exc: RequestValidationError) -> list[dict[str, Any]]:
 
 async def _app_error(_: Request, exc: Exception) -> JSONResponse:
     exc = cast(AppError, exc)
-    headers = {"Retry-After": str(exc.retry_after)} if isinstance(exc, RateLimitedError) else None
+    retry_after = getattr(exc, "retry_after", None)
+    headers = {"Retry-After": str(retry_after)} if retry_after is not None else None
     return JSONResponse(
         error_body(exc.code, exc.message, jsonable_encoder(exc.details)),
         status_code=exc.status_code,

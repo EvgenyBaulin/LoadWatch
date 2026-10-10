@@ -1,0 +1,15 @@
+# Задачи LoadWatch для пользователя loadwatch (crontab -u loadwatch deploy/crontab.example).
+# Время cron — в часовом поясе сервера; держите сервер в UTC.
+# flock -n: если прошлый запуск ещё работает, новый сразу выходит, а не встаёт в очередь.
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+LOADWATCH_ENV_FILE=/etc/loadwatch/env
+
+# Runner: раз в минуту — зависшие запуски, перепроверка владения, расписания, очередь.
+* * * * * cd /opt/loadwatch && flock -n /tmp/loadwatch-runner.lock .venv/bin/python -m loadwatch.runner >> /var/log/loadwatch/runner-cron.log 2>&1
+
+# Еженедельная сводка (фаза 7): каждый час, отправляется тем, у кого наступило выбранное время.
+# 5 * * * * cd /opt/loadwatch && flock -n /tmp/loadwatch-digest.lock .venv/bin/python -m loadwatch.digest >> /var/log/loadwatch/digest.log 2>&1
+
+# Очистка по RETENTION_DAYS (фаза 8): раз в сутки ночью.
+# 30 3 * * * cd /opt/loadwatch && flock -n /tmp/loadwatch-maintenance.lock .venv/bin/python -m loadwatch.maintenance >> /var/log/loadwatch/maintenance.log 2>&1

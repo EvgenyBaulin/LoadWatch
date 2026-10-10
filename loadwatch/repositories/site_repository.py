@@ -18,6 +18,19 @@ class SiteRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
+    def lock(self, site_id: uuid.UUID) -> Site | None:
+        """Сайт с блокировкой строки до конца транзакции.
+
+        Сериализует операции над одним сайтом: постановку запусков в очередь и
+        замену расписания (иначе два параллельных запроса оба прошли бы проверки).
+        """
+        return self._session.scalar(
+            select(Site)
+            .where(Site.id == site_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)  # свежие значения, а не из кэша сессии
+        )
+
     def get_owned(self, site_id: uuid.UUID, owner_id: uuid.UUID) -> Site | None:
         """Сайт по id, только если он принадлежит ``owner_id``."""
         return self._session.scalar(

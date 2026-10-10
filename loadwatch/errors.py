@@ -145,3 +145,47 @@ class SecretsUnavailableError(AppError):
     code = "secrets_unavailable"
     status_code = 503
     message = "Secrets storage is not configured on the server"
+
+
+class InvalidScheduleError(AppError):
+    """Неверное выражение cron, часовой пояс или слишком частые запуски."""
+
+    code = "invalid_schedule"
+    status_code = 422
+    message = "Invalid schedule"
+
+
+class RunInProgressError(AppError):
+    """У сайта уже есть запуск в очереди или в работе."""
+
+    code = "run_in_progress"
+    status_code = 409
+    message = "A test of this site is already queued or running"
+
+
+class CooldownActiveError(AppError):
+    """Между тестами сайта должна пройти пауза ``SITE_COOLDOWN_SEC``."""
+
+    code = "cooldown_active"
+    status_code = 429
+    message = "Too soon after the previous test of this site"
+
+    def __init__(self, retry_after: int) -> None:
+        super().__init__(details={"retry_after": retry_after})
+        self.retry_after = retry_after
+
+
+class MissingSecretsError(AppError):
+    """Сценарий использует секреты, которые не заданы."""
+
+    code = "missing_secrets"
+    status_code = 409
+    message = "The scenario uses secrets that are not set"
+
+
+class RunNotCancellableError(AppError):
+    """Запуск уже завершён."""
+
+    code = "run_not_cancellable"
+    status_code = 409
+    message = "The run has already finished"

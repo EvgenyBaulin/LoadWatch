@@ -16,6 +16,7 @@ from sqlalchemy import (
     Integer,
     String,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -53,6 +54,13 @@ class TestRun(TimestampMixin, Base):
         CheckConstraint("source IN ('manual', 'schedule', 'hook')", name="source"),
         Index("ix_test_runs_site_id_started_at", "site_id", "started_at"),
         Index("ix_test_runs_status_queued_at", "status", "queued_at"),
+        # Не больше одного активного (в очереди или в работе) запуска на сайт — гарантия БД.
+        Index(
+            "uq_test_runs_one_active_per_site",
+            "site_id",
+            unique=True,
+            postgresql_where=text("status IN ('queued', 'running')"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

@@ -13,6 +13,9 @@ def configure_logging(settings: Settings) -> None:
     """Настраивает корневой логгер; повторный вызов безвреден."""
     level = logging.DEBUG if settings.environment is Environment.DEVELOPMENT else logging.INFO
     logging.basicConfig(level=level, format=LOG_FORMAT)
+    # basicConfig ничего не делает, если обработчики уже есть (uvicorn, pytest) —
+    # уровень выставляем явно, иначе INFO-сообщения терялись бы.
+    logging.getLogger().setLevel(level)
     # SQL и строки доступа на уровне DEBUG слишком шумные.
     logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)

@@ -13,7 +13,9 @@ from loadwatch.config import Settings
 from loadwatch.errors import NotAuthenticatedError
 from loadwatch.models import User
 from loadwatch.services.auth_service import AuthService
+from loadwatch.services.run_queue_service import RunQueueService
 from loadwatch.services.scenario_service import ScenarioService
+from loadwatch.services.schedule_service import ScheduleService
 from loadwatch.services.site_service import SiteService
 
 _bearer = HTTPBearer(auto_error=False, description="Access token from /auth/login")
@@ -73,3 +75,19 @@ def get_scenario_service(
 
 
 ScenarioServiceDep = Annotated[ScenarioService, Depends(get_scenario_service)]
+
+
+def get_run_queue_service(session: SessionDep, settings: SettingsDep) -> RunQueueService:
+    """Сервис очереди запусков."""
+    return RunQueueService(session, settings)
+
+
+RunQueueServiceDep = Annotated[RunQueueService, Depends(get_run_queue_service)]
+
+
+def get_schedule_service(session: SessionDep, settings: SettingsDep) -> ScheduleService:
+    """Сервис расписаний."""
+    return ScheduleService(session, settings)
+
+
+ScheduleServiceDep = Annotated[ScheduleService, Depends(get_schedule_service)]

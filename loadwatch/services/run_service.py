@@ -80,6 +80,8 @@ class RunService:
         run = self._runs.get(run_id)
         if run is None:
             raise LookupError(f"run {run_id} not found")
+        if run.status not in (RunStatus.QUEUED.value, RunStatus.RUNNING.value):
+            return run  # отменён, пока ждал в очереди
         try:
             prepared = self._prepare(run)
         except RunAbortedError as exc:
@@ -184,10 +186,16 @@ class RunService:
         return await asyncio.to_thread(self._heartbeat, run.id)
 
     def _heartbeat(self, run_id: uuid.UUID) -> bool:
+        """Отметка «жив»; ``True`` — тест надо остановить (отмена или запуск уже не наш)."""
         run = self._runs.get(run_id)
         if run is None:
             return True
-        self._session.refresh(run, ["cancel_requested"])
+        self._session.refresh(run, ["status", "cancel_requested"], with_for_update=True)
+        if run.status != RunStatus.RUNNING.value:
+            # Запуск признали зависшим и перевели в failed — нагрузку прекращаем.
+            self._session.commit()
+            logger.warning("Run %s is no longer running (%s); stopping load", run.id, run.status)
+            return True
         run.heartbeat_at = utcnow()
         self._session.commit()
         return run.cancel_requested
@@ -199,6 +207,12 @@ class RunService:
         self._runs.save_metrics(
             metrics_from_summary(run.id, summary, outcome.collector, outcome.duration_sec)
         )
+        self._session.refresh(run, ["status"], with_for_update=True)
+        if run.status != RunStatus.RUNNING.value:
+            # Пока шёл тест, запуск пометили зависшим: итог не перезаписываем, метрики — сохраняем.
+            self._session.commit()
+            logger.warning("Run %s finished after being marked %s", run.id, run.status)
+            return
         run.status = (
             RunStatus.CANCELLED.value
             if outcome.stop_reason == "cancelled"
